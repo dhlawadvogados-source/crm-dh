@@ -146,11 +146,11 @@
     var ultimos = rec.slice(0, 12);
     h += '<div class="dh-grid g2">';
     h += '<div class="card dh-card fc-card">' + lbl('Cobranças em aberto (' + abertos.length + ')') +
-      (abertos.length ? '<table class="dh-tbl"><thead><tr><th>Vencimento</th><th>Tipo</th><th class="r">Valor</th><th>Situação</th></tr></thead><tbody>' +
+      (abertos.length ? '<table class="dh-tbl"><thead><tr><th>Vencimento</th><th>Tipo</th><th class="r">Valor</th><th>Situação</th><th></th></tr></thead><tbody>' +
         abertos.map(function (r) {
           var d = parseD(r.Vencimento), atr = d && d < t;
           return '<tr><td>' + fmtD(r.Vencimento) + '</td><td>' + esc(r.Tipo || '—') + '</td><td class="r">' + brl(r.Valor) + '</td><td>' +
-            (atr ? '<span class="fc-st late">Em atraso</span>' : (sim(r.Cobrado) ? '<span class="fc-st wait">Cobrado</span>' : '<span class="fc-st">A cobrar</span>')) + '</td></tr>';
+            (atr ? '<span class="fc-st late">Em atraso</span>' : (sim(r.Cobrado) ? '<span class="fc-st wait">Cobrado</span>' : '<span class="fc-st">A cobrar</span>')) + '</td>' + btnDel(r) + '</tr>';
         }).join('') + '</tbody></table>' : '<div class="empty">Nada em aberto. 👍</div>') + '</div>';
     // resumo mês a mês (últimos 12 meses com lançamento)
     var porMes = {};
@@ -180,12 +180,12 @@
         rows.forEach(function (r) { var v = moneyN(r.Valor); fat += v; if (sim(r.Recebido)) rc += v; else ab += v; });
         return '<div class="fc-ano" data-y="' + y + '"' + (i === 0 ? '' : ' style="display:none"') + '>' +
           '<div class="fc-ano-tot"><span>' + y + '</span><span>Cobrado <b>' + brl(fat) + '</b></span><span>Recebido <b class="pos">' + brl(rc) + '</b></span><span>Em aberto <b class="' + (ab ? 'warn' : '') + '">' + brl(ab) + '</b></span></div>' +
-          '<table class="dh-tbl"><thead><tr><th>Vencimento</th><th>Tipo</th><th>Identificação</th><th class="r">Valor</th><th>Cobrado</th><th>Recebido</th><th>Obs.</th></tr></thead><tbody>' +
+          '<table class="dh-tbl"><thead><tr><th>Vencimento</th><th>Tipo</th><th>Identificação</th><th class="r">Valor</th><th>Cobrado</th><th>Recebido</th><th>Obs.</th><th></th></tr></thead><tbody>' +
           rows.map(function (r) {
             return '<tr><td>' + fmtD(r.Vencimento) + '</td><td>' + esc(r.Tipo || '—') + '</td><td>' + esc(r.IdentificarValor || '') + '</td><td class="r">' + brl(r.Valor) + '</td>' +
               '<td>' + (sim(r.Cobrado) ? 'Sim' : 'Não') + '</td>' +
               '<td>' + (sim(r.Recebido) ? '<span class="fc-st ok">Sim' + (r.DataRecebimento ? ' · ' + fmtD(r.DataRecebimento) : '') + '</span>' : (function () { var d = parseD(r.Vencimento); return d && d < t ? '<span class="fc-st late">Em atraso</span>' : '<span class="fc-st">Não</span>'; })()) + '</td>' +
-              '<td class="fc-obs-c">' + esc(r.Obs || '') + '</td></tr>';
+              '<td class="fc-obs-c">' + esc(r.Obs || '') + '</td>' + btnDel(r) + '</tr>';
           }).join('') + '</tbody></table></div>';
       }).join('') + (rec.length ? '' : '<div class="empty">Sem lançamentos no Contas a Receber.</div>') + '</div>';
     h += '<div class="dh-grid g2">';
@@ -213,6 +213,29 @@
     if (obs.length) h += '<div class="card dh-card fc-card">' + lbl('Observações') + obs.map(function (o) { return '<p class="fc-obs">' + esc(o) + '</p>'; }).join('') + '</div>';
     return h;
   }
+  function btnDel(r) {
+    if (!r.ID) return '<td></td>';
+    return '<td class="r"><button class="fc-del" title="Excluir este lançamento" onclick="fcExcluirReceber(\'' + esc(String(r.ID)).replace(/'/g, '') + '\')">' +
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></td>';
+  }
+  // Exclui um lançamento do Contas a Receber direto da ficha do cliente.
+  window.fcExcluirReceber = function (id) {
+    var r = (DATA.receber || []).filter(function (x) { return String(x.ID) === String(id); })[0];
+    if (!r) return;
+    var txt = 'Excluir este lançamento do Contas a Receber?\n\n' + (r.Cliente || '') + '\nVencimento: ' + fmtD(r.Vencimento) + '\nTipo: ' + (r.Tipo || '—') + '\nValor: ' + brl(r.Valor) + '\n\nIsso apaga a linha da planilha e não dá para desfazer.';
+    if (!confirm(txt)) return;
+    var nome = window.__fcNome, y = (document.querySelector('#fcHist .segbtn.on') || {}).getAttribute ? document.querySelector('#fcHist .segbtn.on').getAttribute('data-y') : null;
+    DATA.receber = DATA.receber.filter(function (x) { return String(x.ID) !== String(id); });
+    abrir(nome);
+    if (y) { var b = document.querySelector('#fcHist .segbtn[data-y="' + y + '"]'); if (b) fcAno(b); }
+    google.script.run
+      .withSuccessHandler(function (res) {
+        if (res && res.success === false) { alert('Não consegui excluir: ' + (res.error || '')); }
+        if (typeof loadData === 'function') loadData(false);
+      })
+      .withFailureHandler(function (e) { alert('Não consegui excluir: ' + e.message); if (typeof loadData === 'function') loadData(false); })
+      .apiDelete('Receber', id);
+  };
   function kpi(l, v, cls) { return '<div class="card dh-card fc-kpi"><div class="dh-lbl">' + l + '</div><div class="dh-money ' + (cls || '') + '">' + v + '</div></div>'; }
 
   /* ---------- aba CLIENTES ---------- */
