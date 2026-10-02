@@ -489,5 +489,18 @@
       try { marcarBlocos(); aplicarVisibilidade(); } catch (e) { console.error('[painel]', e); }
     };
   }
-  document.addEventListener('DOMContentLoaded', function () { setTela('painel'); });
+  // celular: botão ☰ abre o menu como gaveta
+  function montarMenuCelular() {
+    var tb = document.querySelector('.topbar'), side = document.querySelector('.side');
+    if (!tb || !side || document.getElementById('tbMenu')) return;
+    var b = document.createElement('button'); b.id = 'tbMenu'; b.className = 'tb-menu'; b.type = 'button'; b.setAttribute('aria-label', 'Abrir menu');
+    b.innerHTML = '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>';
+    tb.insertBefore(b, tb.firstChild);
+    var fundo = document.createElement('div'); fundo.className = 'side-fundo'; document.body.appendChild(fundo);
+    function abrir(on) { side.classList.toggle('aberto', on); fundo.classList.toggle('on', on); }
+    b.onclick = function () { abrir(!side.classList.contains('aberto')); };
+    fundo.onclick = function () { abrir(false); };
+    side.addEventListener('click', function (e) { if (e.target.closest('nav a')) abrir(false); });
+  }
+  document.addEventListener('DOMContentLoaded', function () { setTela('painel'); montarMenuCelular(); });
 })();

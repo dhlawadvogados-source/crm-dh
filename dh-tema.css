@@ -173,23 +173,49 @@ input:focus,select:focus{border-color:var(--dh-ciano);box-shadow:0 0 0 3px rgba(
   .dh-grid.g3,#dhRow4.dh-grid.g3{grid-template-columns:1fr 1fr;}
   #dashKpis{grid-template-columns:repeat(2,1fr) !important;}
 }
-/* ---------- celular ---------- */
+/* ---------- celular: menu vira gaveta (botão ☰ no topo) ---------- */
+.tb-menu{display:none;background:transparent;border:0;color:#fff;cursor:pointer;padding:8px;margin-left:-6px;border-radius:6px;}
+.tb-menu:hover{background:rgba(255,255,255,.08);}
+.side-fundo{display:none;}
 @media(max-width:860px){
+  html,body{background:var(--bg);}
   .shell{padding-left:0;}
-  .side{position:sticky;top:62px;bottom:auto;width:100%;height:auto;padding:0;z-index:20;overflow:visible;}
-  .side-logo{display:none;}
-  nav{flex-direction:row;overflow-x:auto;}
-  nav a{border-left:0;border-bottom:3px solid transparent;padding:13px 14px;}
-  nav a.active{border-bottom-color:var(--dh-ciano);}
-  .topbar{margin-left:0;padding:0 14px;}
+  .side{display:block !important;position:fixed;top:0;left:0;bottom:0;width:270px;max-width:82vw;height:100%;padding:0 0 24px;z-index:200;overflow-y:auto;transform:translateX(-105%);transition:transform .25s ease;box-shadow:none;}
+  .side.aberto{transform:none;box-shadow:12px 0 40px rgba(0,0,0,.35);}
+  .side-logo{display:flex;height:76px;}
+  .side-logo img{height:38px;}
+  nav{flex-direction:column;overflow:visible;}
+  nav a{border-left:4px solid transparent;border-bottom:0;padding:14px 22px;}
+  nav a.active{border-left-color:var(--dh-ciano);}
+  .side-fundo{position:fixed;inset:0;background:rgba(10,15,35,.5);z-index:150;}
+  .side-fundo.on{display:block;}
+  .tb-menu{display:inline-flex;}
+  .topbar{margin-left:0;padding:0 12px;gap:8px;height:58px;}
+  .tb-tela{display:none;}
   .tb-mes{display:none;}
+  .tb-busca{margin-left:0;height:38px;}
+  .tb-busca input{font-size:16px;}
+  .tb-busca kbd{display:none;}
+  .tb-right2{gap:10px;}
   main{padding:18px 14px 50px;}
-  .dh-grid.g3,#dhRow4.dh-grid.g3,.dh-grid.g2{grid-template-columns:1fr !important;}
-  #dashKpis{grid-template-columns:1fr 1fr !important;}
+  .dh-grid.g3,#dhRow4.dh-grid.g3,#finRowS.dh-grid.g3,.dh-grid.g2{grid-template-columns:1fr !important;}
+  .dh-grid.g4,#dashKpis{grid-template-columns:1fr 1fr !important;}
   .dh-vsep{display:none;}
   .dh-hello{font-size:24px;}
+  .dh-kpi{padding:16px;gap:12px;}
+  .dh-kpi .dh-ico{width:38px;height:38px;flex-basis:38px;}
+  .dh-kpi-v b{font-size:26px;}
+  .dh-chev{display:none;}
+  .dh-kpi .dh-ico{display:none;}
+  .dh-kpi .dh-lbl{white-space:normal;overflow:visible;line-height:1.35;}
+  .fin-head{align-items:stretch;}
+  .fin-per{width:100%;}
+  .card{padding:16px;}
+  .scroll,.dh-card{overflow-x:auto;}
+  .lc-bar input{width:100%;}
+  .fc-mes-tbl .fc-comp{display:none;}
+  .modal-bg{padding:12px 8px;}
 }
-
 /* ---------- tela de login ---------- */
 body.lg-open{overflow:hidden;}
 .lg-gate{display:none;position:fixed;inset:0;z-index:1000;background:var(--dh-marinho);
@@ -238,7 +264,7 @@ body.lg-open{overflow:hidden;}
 /* a cor do menu acompanha até o fim da página */
 html,body{background:linear-gradient(to right,var(--dh-marinho) 0,var(--dh-marinho) var(--side),var(--bg) var(--side));min-height:100%;}
 .side{position:fixed;top:0;bottom:0;height:100vh;}
-@media(max-width:860px){html,body{background:var(--bg);} .side{position:sticky;height:auto;}}
+@media(max-width:860px){html,body{background:var(--bg);}}
 /* busca do topo */
 .tb-busca{position:relative;flex:1;max-width:560px;margin-left:28px;display:flex;align-items:center;gap:10px;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.14);border-radius:6px;padding:0 12px;height:40px;color:#AEB8D8;transition:.2s;}
 .tb-busca:focus-within{background:#fff;border-color:#fff;color:var(--dh-azul);}
@@ -321,3 +347,4 @@ html,body{background:linear-gradient(to right,var(--dh-marinho) 0,var(--dh-marin
 .fc-det-tbl td{padding:8px 8px;border-bottom:1px dashed #E6E9F0;}
 .fc-det-tbl tr:last-child td{border-bottom:0;}
 .fc-mes-tbl .fc-mini{padding:5px 10px;font-size:9.5px;}
+.dh-modelo{padding:9px 12px !important;font-size:10.5px !important;margin-left:-4px;}
