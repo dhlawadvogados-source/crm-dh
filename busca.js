@@ -180,15 +180,26 @@
         rows.forEach(function (r) { var v = moneyN(r.Valor); fat += v; if (sim(r.Recebido)) rc += v; else ab += v; });
         return '<div class="fc-ano" data-y="' + y + '"' + (i === 0 ? '' : ' style="display:none"') + '>' +
           '<div class="fc-ano-tot"><span>' + y + '</span><span>Cobrado <b>' + brl(fat) + '</b></span><span>Recebido <b class="pos">' + brl(rc) + '</b></span><span>Em aberto <b class="' + (ab ? 'warn' : '') + '">' + brl(ab) + '</b></span></div>' +
-          '<table class="dh-tbl"><thead><tr><th>Vencimento</th><th>Tipo</th><th>Identificação</th><th class="r">Valor</th><th>Cobrado</th><th>Recebido</th><th>Obs.</th><th></th></tr></thead><tbody>' +
-          rows.map(function (r) {
-            return '<tr><td>' + fmtD(r.Vencimento) + '</td><td>' + esc(r.Tipo || '—') + '</td><td>' + esc(r.IdentificarValor || '') + '</td><td class="r">' + brl(r.Valor) + '</td>' +
-              '<td>' + (sim(r.Cobrado) ? 'Sim' : 'Não') + '</td>' +
-              '<td>' + (sim(r.Recebido) ? '<span class="fc-st ok">Sim' + (r.DataRecebimento ? ' · ' + fmtD(r.DataRecebimento) : '') + '</span>' : (function () { var d = parseD(r.Vencimento); return d && d < t ? '<span class="fc-st late">Em atraso</span>' : '<span class="fc-st">Não</span>'; })()) + '</td>' +
-              '<td class="fc-obs-c">' + esc(r.Obs || '') + '</td>' + btnDel(r) + '</tr>';
+          '<table class="dh-tbl fc-mes-tbl"><thead><tr><th>Mês</th><th>Vencimento</th><th class="r">Total do mês</th><th>Situação</th><th>Composição</th><th></th></tr></thead><tbody>' +
+          gruposMes(rows).map(function (g) {
+            var venc = g.vencs.length === 1 ? fmtD(g.vencs[0]) : g.vencs.map(fmtD).join(', ');
+            var st = g.rec >= g.tot - 0.005 ? '<span class="fc-st ok">Recebido' + (g.drec ? ' · ' + fmtD(g.drec) : '') + '</span>'
+              : (g.rec > 0 ? '<span class="fc-st wait">Parcial · falta ' + brl(g.tot - g.rec) + '</span>'
+              : (g.atraso ? '<span class="fc-st late">Em atraso</span>' : (g.cob ? '<span class="fc-st wait">Cobrado</span>' : '<span class="fc-st">A cobrar</span>')));
+            var comp = g.itens.map(function (r) { return esc(r.Tipo || 'Outros'); }).join(' + ');
+            var key = g.m;
+            return '<tr class="fc-mes" onclick="fcToggleMes(\'' + key + '\')"><td><b>' + mesLbl(g.m) + '</b></td><td>' + venc + '</td><td class="r"><b>' + brl(g.tot) + '</b></td><td>' + st + '</td>' +
+              '<td class="fc-comp">' + comp + ' <span class="fc-n">(' + g.itens.length + ')</span></td>' +
+              '<td class="r fc-acoes">' + (g.aberto ? '<button class="btn ghost fc-mini" onclick="event.stopPropagation();fcNovoVenc(\'' + key + '\')" title="Mudar a data de vencimento de tudo que está em aberto neste mês">Mudar vencimento</button>' : '') +
+              '<span class="fc-seta">▾</span></td></tr>' +
+              '<tr class="fc-det" data-m="' + key + '" style="display:none"><td colspan="6"><table class="dh-tbl fc-det-tbl"><tbody>' +
+              g.itens.map(function (r) {
+                return '<tr><td>' + fmtD(r.Vencimento) + '</td><td>' + esc(r.Tipo || '—') + '</td><td>' + esc(r.IdentificarValor || '') + '</td><td class="r">' + brl(r.Valor) + '</td>' +
+                  '<td>' + (sim(r.Recebido) ? '<span class="fc-st ok">Recebido' + (r.DataRecebimento ? ' · ' + fmtD(r.DataRecebimento) : '') + '</span>' : (function () { var d = parseD(r.Vencimento); return d && d < t ? '<span class="fc-st late">Em atraso</span>' : (sim(r.Cobrado) ? '<span class="fc-st wait">Cobrado</span>' : '<span class="fc-st">A cobrar</span>'); })()) + '</td>' +
+                  '<td class="fc-obs-c">' + esc(r.Obs || '') + '</td>' + btnDel(r) + '</tr>';
+              }).join('') + '</tbody></table></td></tr>';
           }).join('') + '</tbody></table></div>';
       }).join('') + (rec.length ? '' : '<div class="empty">Sem lançamentos no Contas a Receber.</div>') + '</div>';
-    h += '<div class="dh-grid g2">';
 
     // rentabilidade + propostas
     h += '<div class="dh-grid g2">';
@@ -215,7 +226,10 @@
   }
   function btnDel(r) {
     if (!r.ID) return '<td></td>';
-    return '<td class="r"><button class="fc-del" title="Excluir este lançamento" onclick="fcExcluirReceber(\'' + esc(String(r.ID)).replace(/'/g, '') + '\')">' +
+    var idq = esc(String(r.ID)).replace(/'/g, '');
+    return '<td class="r fc-acoes"><button class="fc-edit" title="Editar este lançamento" onclick="fcEditarReceber(\'' + idq + '\')">' +
+      '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="m13.5 6.5 4 4"/></svg></button>' +
+      '<button class="fc-del" title="Excluir este lançamento" onclick="fcExcluirReceber(\'' + esc(String(r.ID)).replace(/'/g, '') + '\')">' +
       '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></td>';
   }
   // Exclui um lançamento do Contas a Receber direto da ficha do cliente.
@@ -235,6 +249,95 @@
       })
       .withFailureHandler(function (e) { alert('Não consegui excluir: ' + e.message); if (typeof loadData === 'function') loadData(false); })
       .apiDelete('Receber', id);
+  };
+  // Edita um lançamento do Contas a Receber (é a mesma linha que aparece na tela Receber).
+  function isoDe(v) { var d = parseD(v); return d ? d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2) : ''; }
+  window.fcEditarReceber = function (id) {
+    var r = (DATA.receber || []).filter(function (x) { return String(x.ID) === String(id); })[0]; if (!r) return;
+    var tipos = ['Mensal', 'DET', 'Audiência', 'Horas consultivo', 'Horas processual', 'Processos extras', 'Excesso de horas', 'Reembolso de custas', 'Outros'];
+    if (r.Tipo && tipos.indexOf(r.Tipo) < 0) tipos.unshift(r.Tipo);
+    function sel(id2, val, ops) { return '<select id="' + id2 + '">' + ops.map(function (o) { return '<option' + (o === val ? ' selected' : '') + '>' + esc(o) + '</option>'; }).join('') + '</select>'; }
+    var h = '<div class="mhead"><button class="mclose" onclick="closeModal()">✕</button><h2>Editar lançamento</h2><div class="mtags"><span class="tag b">' + esc(r.Cliente) + '</span></div></div><div class="mbody">' +
+      '<div class="form fc-form">' +
+      '<div><label>Vencimento</label><input id="fcr_venc" type="date" value="' + isoDe(r.Vencimento) + '"></div>' +
+      '<div><label>Tipo</label>' + sel('fcr_tipo', r.Tipo || 'Outros', tipos) + '</div>' +
+      '<div><label>Valor (R$)</label><input id="fcr_val" type="number" step="0.01" value="' + (moneyN(r.Valor) || '') + '"></div>' +
+      '<div><label>Identificação</label><input id="fcr_ident" value="' + esc(r.IdentificarValor || '') + '" placeholder="ex: Parcela 1/2"></div>' +
+      '<div><label>Já foi cobrado?</label>' + sel('fcr_cob', sim(r.Cobrado) ? 'Sim' : 'Não', ['Não', 'Sim']) + '</div>' +
+      '<div><label>Recebido?</label>' + sel('fcr_rec', sim(r.Recebido) ? 'Sim' : 'Não', ['Não', 'Sim']) + '</div>' +
+      '<div><label>Data do recebimento</label><input id="fcr_drec" type="date" value="' + isoDe(r.DataRecebimento) + '"></div>' +
+      '<div style="grid-column:span 4"><label>Observações</label><input id="fcr_obs" value="' + esc(r.Obs || '') + '"></div>' +
+      '</div><div class="miuda">Esta é a mesma linha do <b>Contas a Receber</b>: ao salvar, a mudança aparece lá, nos Dados financeiros e na planilha.</div></div>' +
+      '<div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="fcSalvarReceber(\'' + esc(String(id)).replace(/'/g, '') + '\')">Salvar</button></div>';
+    el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
+  };
+  window.fcSalvarReceber = function (id) {
+    var r = (DATA.receber || []).filter(function (x) { return String(x.ID) === String(id); })[0]; if (!r) return;
+    var val = parseFloat($('fcr_val').value);
+    if (!$('fcr_venc').value) { alert('Informe o vencimento.'); return; }
+    if (isNaN(val) || val <= 0) { alert('Informe um valor maior que zero.'); return; }
+    var obj = { Vencimento: $('fcr_venc').value, Tipo: $('fcr_tipo').value, Valor: val, IdentificarValor: $('fcr_ident').value,
+      Cobrado: $('fcr_cob').value, Recebido: $('fcr_rec').value, DataRecebimento: $('fcr_rec').value === 'Sim' ? ($('fcr_drec').value || isoDe(hoje())) : '', Obs: $('fcr_obs').value };
+    for (var k in obj) r[k] = obj[k];
+    closeModal();
+    var y = document.querySelector('#fcHist .segbtn.on'); y = y ? y.getAttribute('data-y') : null;
+    abrir(window.__fcNome);
+    if (y) { var b = document.querySelector('#fcHist .segbtn[data-y="' + y + '"]'); if (b) fcAno(b); }
+    google.script.run
+      .withSuccessHandler(function (res) { if (res && res.success === false) alert('Não consegui salvar: ' + (res.error || '')); if (typeof loadData === 'function') loadData(false); })
+      .withFailureHandler(function (e) { alert('Não consegui salvar: ' + e.message); if (typeof loadData === 'function') loadData(false); })
+      .apiUpdateRow('Receber', id, obj);
+  };
+  function gruposMes(rows) {
+    var t = hoje(), map = {};
+    rows.forEach(function (r) {
+      var d = parseD(r.Vencimento), m = d ? d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) : 'sem-data';
+      var g = map[m] || (map[m] = { m: m, itens: [], tot: 0, rec: 0, vencs: [], atraso: false, cob: true, aberto: false, drec: null });
+      var v = moneyN(r.Valor); g.itens.push(r); g.tot += v;
+      var vi = isoDe(r.Vencimento); if (vi && g.vencs.indexOf(vi) < 0) g.vencs.push(vi);
+      if (sim(r.Recebido)) { g.rec += v; var dr = parseD(r.DataRecebimento); if (dr && (!g.drec || dr > parseD(g.drec))) g.drec = isoDe(r.DataRecebimento); }
+      else { g.aberto = true; if (d && d < t) g.atraso = true; if (!sim(r.Cobrado)) g.cob = false; }
+    });
+    return Object.keys(map).sort().reverse().map(function (k) { map[k].vencs.sort(); return map[k]; });
+  }
+  window.fcToggleMes = function (m) {
+    var d = document.querySelector('#fcHist .fc-det[data-m="' + m + '"]'); if (!d) return;
+    var abre = d.style.display === 'none'; d.style.display = abre ? '' : 'none';
+    var tr = d.previousElementSibling; if (tr) tr.classList.toggle('open', abre);
+  };
+  // Muda o vencimento de tudo que está em aberto no mês (ex.: cliente pediu mais prazo).
+  window.fcNovoVenc = function (m) {
+    var nome = window.__fcNome, k = norm(nome);
+    var itens = (DATA.receber || []).filter(function (r) { return norm(r.Cliente) === k && !sim(r.Recebido) && isoDe(r.Vencimento).slice(0, 7) === m; });
+    if (!itens.length) return;
+    var atual = itens.map(function (r) { return isoDe(r.Vencimento); }).sort()[0];
+    var tot = itens.reduce(function (s0, r) { return s0 + moneyN(r.Valor); }, 0);
+    var h = '<div class="mhead"><button class="mclose" onclick="closeModal()">✕</button><h2>Mudar vencimento · ' + mesLbl(m) + '</h2><div class="mtags"><span class="tag b">' + esc(nome) + '</span></div></div><div class="mbody">' +
+      '<div class="form fc-form"><div><label>Novo vencimento</label><input id="fcr_nv" type="date" value="' + atual + '"></div>' +
+      '<div style="grid-column:span 3"><label>Motivo (vai para as observações)</label><input id="fcr_nvobs" placeholder="ex: cliente pediu prorrogação"></div></div>' +
+      '<div class="miuda">Vai mudar <b>' + itens.length + ' lançamento(s) em aberto</b>, total de <b>' + brl(tot) + '</b>: ' + itens.map(function (r) { return esc(r.Tipo || 'Outros') + ' ' + brl(r.Valor); }).join(' · ') + '. O que já foi recebido não muda.</div></div>' +
+      '<div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" onclick="fcSalvarNovoVenc(\'' + m + '\')">Salvar novo vencimento</button></div>';
+    el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
+  };
+  window.fcSalvarNovoVenc = function (m) {
+    var nv = $('fcr_nv').value, motivo = $('fcr_nvobs').value.trim();
+    if (!nv) { alert('Escolha a nova data.'); return; }
+    var k = norm(window.__fcNome);
+    var itens = (DATA.receber || []).filter(function (r) { return norm(r.Cliente) === k && !sim(r.Recebido) && isoDe(r.Vencimento).slice(0, 7) === m; });
+    closeModal();
+    var pend = itens.length, erro = null;
+    itens.forEach(function (r) {
+      var antes = isoDe(r.Vencimento);
+      var obs = motivo ? ((r.Obs ? r.Obs + ' · ' : '') + motivo + ' (venc. era ' + fmtD(antes) + ')') : r.Obs || '';
+      var obj = { Vencimento: nv, Obs: obs };
+      r.Vencimento = nv; r.Obs = obs;
+      google.script.run
+        .withSuccessHandler(function (res) { if (res && res.success === false) erro = res.error; if (--pend === 0) fim(); })
+        .withFailureHandler(function (e) { erro = e.message; if (--pend === 0) fim(); })
+        .apiUpdateRow('Receber', r.ID, obj);
+    });
+    function fim() { if (erro) alert('Algum lançamento não foi salvo: ' + erro); if (typeof loadData === 'function') loadData(false); }
+    abrir(window.__fcNome);
   };
   function kpi(l, v, cls) { return '<div class="card dh-card fc-kpi"><div class="dh-lbl">' + l + '</div><div class="dh-money ' + (cls || '') + '">' + v + '</div></div>'; }
 
