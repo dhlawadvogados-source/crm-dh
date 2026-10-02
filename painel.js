@@ -328,11 +328,16 @@
     var margem = ent > 0 ? luc / ent * 100 : 0;
     var fonte = ex ? 'extrato bancário' : 'Receber e Pagar (sem extrato importado)';
 
+    // aviso: Graciola importada antes das regras (contando como receita)
+    var av = $('finAviso'); if (!av) { av = document.createElement('div'); av.id = 'finAviso'; $('finTop').parentNode.insertBefore(av, $('finTop')); }
+    av.innerHTML = ex && typeof window.dhExAvisoDH === 'function' ? window.dhExAvisoDH() : '';
     // 1) entradas · saídas · lucro do mês
     $('finTop').innerHTML =
       '<div class="card dh-card" onclick="' + (ex ? 'dhExDetalhe(\'ent\')' : 'goTo(\'receber\')') + '">' + lbl('Entradas · ' + perNome()) +
         '<div class="dh-row"><span class="dh-ico ok">' + ic('bars', 24) + '</span><div><div class="dh-money pos">' + brl0(ent) + '</div><div class="dh-sub">' + (ex ? 'entrou no banco (sem Graciola)' : 'recebido no período') + '</div></div></div>' +
-        '<div class="dh-split"><div><span>Previsto em Receber</span><b>' + brl0(f.prev) + '</b></div><div><span>' + (ex ? 'Graciola à parte' : 'Recebido do previsto') + '</span><b>' + (ex ? brl0(ex.graRec) : Math.round(f.prev ? f.rec / f.prev * 100 : 0) + '%') + '</b></div></div></div>' +
+        (ex ? '<div class="dh-split"><div><span>Graciola (à parte)</span><b>' + brl0(ex.graRec) + '</b></div><div><span>Total com Graciola</span><b>' + brl0(ex.rec + ex.graRec) + '</b></div></div>' +
+              '<div class="dh-sub dh-fora">Previsto em Receber: ' + brl0(f.prev) + '</div>'
+            : '<div class="dh-split"><div><span>Previsto em Receber</span><b>' + brl0(f.prev) + '</b></div><div><span>Recebido do previsto</span><b>' + Math.round(f.prev ? f.rec / f.prev * 100 : 0) + '%</b></div></div>') + '</div>' +
       '<div class="card dh-card" onclick="' + (ex ? 'dhExDetalhe(\'sai\')' : 'goTo(\'pagar\')') + '">' + lbl('Saídas · ' + perNome()) +
         '<div class="dh-row"><span class="dh-ico out">' + ic('out', 24) + '</span><div><div class="dh-money">' + brl0(sai) + '</div><div class="dh-sub">' + (ex ? 'despesas + salário da Mariana' : 'despesas pagas') + '</div></div></div>' +
         (ex ? '<div class="dh-split"><div><span>Despesas</span><b>' + brl0(ex.desp) + '</b></div><div><span>Salário Mariana</span><b>' + brl0(ex.pro) + '</b></div></div>'

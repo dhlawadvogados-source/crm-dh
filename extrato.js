@@ -469,6 +469,7 @@
       '<button class="btn ghost" onclick="dhExAplicarRegras()">Aplicar regras nos "A classificar"</button>' +
       '<span class="miuda">Aceita o Excel do <b>Conta Azul</b> (Finanças › Extrato › Exportar) e o extrato do BB/Caixa em <b>OFX</b>, CSV ou Excel.</span></div>';
 
+    h += avisoDH();
     if (!todos.length) {
       h += '<div class="card dh-card fc-card ex-vazio">' + lbl('Comece importando um extrato') +
         '<p>1. No internet banking do <b>Banco do Brasil</b> ou da <b>Caixa</b>, abra o extrato da conta, escolha o período (pode ser o ano todo de 2026) e salve em <b>OFX</b> (às vezes aparece como "Money", "Quicken" ou "OFX"). Se não tiver OFX, salve em CSV ou Excel.</p>' +
@@ -786,6 +787,31 @@
   window.dhExTirar = function (id) { salvar([id], { Classe: CL.FORA }); atualizarTelas(); };
   window.dhExRecolocar = function (id) { var x = achar(id); if (!x) return; salvar([id], { Classe: num(x.Valor) > 0 ? CL.REC : CL.DESP }); atualizarTelas(); };
   window.dhExFecharDet = function () { DET = null; closeModal(); };
+
+  /* ---------- correção: lançamentos importados antes das regras da DH ---------- */
+  function regraDH(x) {
+    var c = x.Classe || CL.PEN; if (c === CL.FORA || c === CL.GRA) return null;
+    var txt = norm((x.Categoria || '') + ' ' + (x.Descricao || '')), v = num(x.Valor);
+    if (/GRACIOLA/.test(txt)) return CL.GRA;
+    if (v < 0 && /SIMPLES|\bDAS\b/.test(norm(x.Categoria || '')) && /CEF|CAIXA|HEROLD/.test(norm(x.Conta)) && c === CL.DESP) return CL.GRA;
+    if (v < 0 && /CART(AO|OES)/.test(norm(x.Categoria || '')) && /CONSULTORIA/.test(norm(x.Conta)) && c === CL.DESP) return CL.RET;
+    return null;
+  }
+  function pendentesDH() { var out = []; (DATA.extrato || []).forEach(function (x) { var n = regraDH(x); if (n) out.push({ x: x, nova: n }); }); return out; }
+  window.dhExPendentesDH = function () { return pendentesDH().length; };
+  window.dhExCorrigirDH = function () {
+    var p = pendentesDH(); if (!p.length) { alert('Nada para corrigir.'); return; }
+    var g = 0, rr = 0; p.forEach(function (o) { if (o.nova === CL.GRA) g++; else rr++; });
+    if (!confirm('Vou corrigir ' + p.length + ' lançamento(s):\n\n• ' + g + ' da Graciola (notas e DAS) → "Graciola (à parte)"' + (rr ? '\n• ' + rr + ' do cartão da Consultoria → "Retirada Mariana"' : '') + '\n\nContinuar?')) return;
+    var grupos = {}; p.forEach(function (o) { (grupos[o.nova] = grupos[o.nova] || []).push(o.x.ID); });
+    Object.keys(grupos).forEach(function (cl) { salvar(grupos[cl], { Classe: cl }); });
+    if (typeof window.renderDash === 'function') window.renderDash();
+  };
+  function avisoDH() {
+    var n = pendentesDH().length; if (!n) return '';
+    return '<div class="ex-pend ex-dh" onclick="dhExCorrigirDH()">⚠ <b>' + n + ' lançamento(s) da Graciola</b> (ou do cartão da Consultoria) estão contando no lucro. Foram importados antes das regras da DH. <u>Clique para corrigir</u>.</div>';
+  }
+  window.dhExAvisoDH = avisoDH;
 
   window.dhExRender = render;
 })();

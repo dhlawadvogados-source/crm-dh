@@ -441,3 +441,4 @@ html,body{background:linear-gradient(to right,var(--dh-marinho) 0,var(--dh-marin
 .ex-tirar{color:#c33350;border-color:#EBB0BC;}
 .ex-tirar:hover{background:#FDF3F5;}
 .ex-det .fc-mini,.ex-tbl .fc-mini{white-space:nowrap;}
+.ex-dh{margin:0 0 16px;font-size:13px;} #finAviso .ex-dh{margin:0 0 16px;}
