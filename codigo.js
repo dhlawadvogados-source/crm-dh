@@ -41,7 +41,9 @@ var SHEETS = {
   Aniversarios:  ["ID","Nome","Data","PrevisaoReajuste","Obs"],
   FeriasHistorico: ["ID","Nome","Inicio","Fim","Dias","Obs"],
   Config:        ["Chave","Valor"],
-  PagarPadrao:   ["Descricao","Valor","Categoria","DiaVencimento"]
+  PagarPadrao:   ["Descricao","Valor","Categoria","DiaVencimento"],
+  Extrato:       ["ID","Data","Descricao","Valor","Conta","Classe","Categoria","Chave","Obs","Importado"],
+  ExtratoRegras: ["ID","Contem","Classe","Categoria","Conta","Ordem"]
 };
 
 // Advogados de referencia. VERSAO WEB: os valores/hora ficam so na aba Advogados da planilha.
@@ -322,7 +324,9 @@ function apiGetAll() {
       ferias: objRows_("Ferias"),
       aniversarios: objRows_("Aniversarios"),
       feriasHistorico: objRows_("FeriasHistorico"),
-      lancamentosSalario: objRows_("LancamentosSalario")
+      lancamentosSalario: objRows_("LancamentosSalario"),
+      extrato: objRows_("Extrato"),
+      extratoRegras: objRows_("ExtratoRegras")
     };
     d.dash = dashboardFrom_(d);   // dashboard calculado sem reler as abas
     return ok_(d);
@@ -1734,5 +1738,78 @@ function apiLancarExtrasReceber(cliente, mes){
       apiAdd("Receber",{Cliente:cliente, Tipo:it.Tipo, Vencimento:venc, Valor:it.Valor, Cobrado:"Não", Recebido:"Não", IdentificarValor:it.Ident}); criados++;
     });
     return ok_({lancados:itens.length, criados:criados, totalExtra:d.totalExtra});
+  }catch(e){ return err_(e.message); }
+}
+
+/* ================= EXTRATO BANCÁRIO (versão web) =================
+   Lançamentos importados dos extratos (OFX/CSV/Excel) do Banco do Brasil e da Caixa.
+   Classe: Receita, Despesa, Pró-labore sócia, Retirada sócia, Aporte sócia, Aplicação,
+   Resgate, Transferência entre contas, Outros (fora do lucro), A classificar. */
+function extratoSheet_(){ var sh=getDb_().getSheetByName("Extrato"); if(!sh) throw new Error("Aba Extrato não encontrada."); return sh; }
+// Grava de uma vez só (rápido) os lançamentos novos; ignora os que já existem (mesma Chave).
+function apiExtratoImportar(linhas){
+  try{
+    var sh=extratoSheet_(); var head=headOf_(sh);
+    var ic=head.indexOf("Chave"); var vals=sh.getDataRange().getValues(); var ja={};
+    for(var i=1;i<vals.length;i++){ var k=String(vals[i][ic]||""); if(k) ja[k]=1; }
+    var novos=[], rep=0, agora=Utilities.formatDate(new Date(), tz_(), "yyyy-MM-dd HH:mm");
+    (linhas||[]).forEach(function(o){
+      var k=String(o.Chave||""); if(!k){ rep++; return; }
+      if(ja[k]){ rep++; return; } ja[k]=1;
+      o.Importado=agora;
+      novos.push(head.map(function(c){ if(c==="ID") return newId_(); return (o[c]!==undefined&&o[c]!==null)?o[c]:""; }));
+    });
+    if(novos.length){ var start=Math.max(sh.getLastRow(),1)+1; sh.getRange(start,1,novos.length,head.length).setValues(novos); }
+    return ok_({ novos:novos.length, repetidos:rep });
+  }catch(e){ return err_(e.message); }
+}
+// Atualiza os mesmos campos em vários lançamentos (classificar em lote).
+function apiExtratoAtualizar(ids, obj){
+  try{
+    var sh=extratoSheet_(); var vals=sh.getDataRange().getValues(); var head=vals[0]; var idc=head.indexOf("ID");
+    var set={}; (ids||[]).forEach(function(x){ set[String(x)]=1; }); var n=0;
+    for(var i=1;i<vals.length;i++){
+      if(!set[String(vals[i][idc])]) continue;
+      head.forEach(function(c,ci){ if(c!=="ID" && obj[c]!==undefined) vals[i][ci]=obj[c]; });
+      sh.getRange(i+1,1,1,head.length).setValues([vals[i]]); n++;
+    }
+    return ok_({ atualizados:n });
+  }catch(e){ return err_(e.message); }
+}
+// Divide um lançamento em partes (ex.: fatura do cartão = despesas do escritório + gastos da sócia).
+function apiExtratoDividir(id, partes){
+  try{
+    if(!partes || partes.length<2) return err_("Informe pelo menos duas partes.");
+    var sh=extratoSheet_(); var vals=sh.getDataRange().getValues(); var head=vals[0];
+    var idc=head.indexOf("ID"), vc=head.indexOf("Valor"), kc=head.indexOf("Chave");
+    for(var i=1;i<vals.length;i++){
+      if(String(vals[i][idc])!==String(id)) continue;
+      var orig=vals[i].slice(), total=round2_(money_(orig[vc])), soma=0;
+      partes.forEach(function(p){ soma+=Number(p.Valor)||0; });
+      if(Math.abs(round2_(soma)-total)>0.01) return err_("A soma das partes ("+round2_(soma)+") precisa ser igual ao valor original ("+total+").");
+      var novas=[];
+      partes.forEach(function(p,ix){
+        var row=orig.slice();
+        if(ix>0) row[idc]=newId_();
+        row[vc]=round2_(Number(p.Valor)||0);
+        row[head.indexOf("Classe")]=p.Classe||"A classificar";
+        row[head.indexOf("Categoria")]=p.Categoria||"";
+        row[head.indexOf("Obs")]=p.Obs!==undefined?p.Obs:row[head.indexOf("Obs")];
+        row[kc]=String(orig[kc])+(ix>0?"#"+(ix+1):"");
+        if(ix===0) sh.getRange(i+1,1,1,head.length).setValues([row]); else novas.push(row);
+      });
+      if(novas.length) sh.getRange(sh.getLastRow()+1,1,novas.length,head.length).setValues(novas);
+      return ok_({ partes:partes.length });
+    }
+    return err_("lançamento não encontrado");
+  }catch(e){ return err_(e.message); }
+}
+// Exclui vários lançamentos (de baixo para cima, para não bagunçar as linhas).
+function apiExtratoExcluir(ids){
+  try{
+    var sh=extratoSheet_(); var vals=sh.getDataRange().getValues(); var idc=vals[0].indexOf("ID");
+    var set={}; (ids||[]).forEach(function(x){ set[String(x)]=1; }); var n=0;
+    for(var i=vals.length-1;i>=1;i--){ if(set[String(vals[i][idc])]){ sh.deleteRow(i+1); n++; } }
+    return ok_({ excluidos:n });
   }catch(e){ return err_(e.message); }
 }
