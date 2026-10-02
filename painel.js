@@ -47,50 +47,97 @@
     return '<div class="dh-bar">' + parts.map(function (p) { return '<span class="' + p[1] + '" style="width:' + Math.max(0, Math.min(100, p[0])).toFixed(1) + '%"></span>'; }).join('') + '</div>';
   }
 
-  /* ---------- cálculos ---------- */
+  /* ---------- período escolhido em Dados financeiros ---------- */
+  var MES_L2 = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+  var PER = null;
+  function perPadrao() { return { tipo: 'mes', ym: ymOf(hoje()) }; }
+  function perAtual() {
+    if (PER) return PER;
+    try { var s0 = JSON.parse(localStorage.getItem('crm_fin_periodo') || 'null'); if (s0 && (s0.ym || s0.ano)) PER = s0; } catch (e) {}
+    return PER || (PER = perPadrao());
+  }
+  function perMeses(per) {
+    per = per || perAtual();
+    if (per.tipo === 'ano') { var o = []; for (var i = 1; i <= 12; i++) o.push(per.ano + '-' + ('0' + i).slice(-2)); return o; }
+    return [per.ym];
+  }
+  function noPer(m, per) { per = per || perAtual(); return per.tipo === 'ano' ? String(m).slice(0, 4) === String(per.ano) : m === per.ym; }
+  function fimPer(per) { var ms = perMeses(per); var u = ms[ms.length - 1]; return new Date(+u.slice(0, 4), +u.slice(5, 7), 0); }
+  function perNome(per) { per = per || perAtual(); return per.tipo === 'ano' ? 'ano de ' + per.ano : MES_L2[+per.ym.slice(5, 7) - 1] + '/' + per.ym.slice(0, 4); }
+  function perCurto(per) { per = per || perAtual(); return per.tipo === 'ano' ? 'em ' + per.ano : 'em ' + MES_L2[+per.ym.slice(5, 7) - 1]; }
+  window.dhSetPeriodo = function (v) {
+    PER = /^\d{4}$/.test(v) ? { tipo: 'ano', ano: v } : { tipo: 'mes', ym: v };
+    try { localStorage.setItem('crm_fin_periodo', JSON.stringify(PER)); } catch (e) {}
+    try { renderExtra(); marcarBlocos(); aplicarVisibilidade(); } catch (e) { console.error(e); }
+  };
+  function opcoesPeriodo() {
+    var atual = ymOf(hoje()), min = atual, max = atual;
+    function ver(v) { var m = mesDe(v); if (/^\d{4}-\d{2}$/.test(m)) { if (m < min) min = m; if (m > max) max = m; } }
+    (DATA.receber || []).forEach(function (x) { ver(x.Vencimento); });
+    (DATA.pagar || []).forEach(function (x) { ver(x.Data); });
+    if (max > ymAdd(atual, 12)) max = ymAdd(atual, 12);
+    if (min < ymAdd(atual, -36)) min = ymAdd(atual, -36);
+    var meses = [], anos = {};
+    for (var m = max; m >= min; m = ymAdd(m, -1)) { meses.push(m); anos[m.slice(0, 4)] = 1; }
+    var per = perAtual(), selV = per.tipo === 'ano' ? per.ano : per.ym;
+    return '<optgroup label="Mês">' + meses.map(function (m) {
+      return '<option value="' + m + '"' + (m === selV ? ' selected' : '') + '>' + MES_L2[+m.slice(5, 7) - 1].replace(/^./, function (c) { return c.toUpperCase(); }) + ' ' + m.slice(0, 4) + (m === atual ? ' (atual)' : '') + '</option>';
+    }).join('') + '</optgroup><optgroup label="Ano inteiro">' + Object.keys(anos).sort().reverse().map(function (y) {
+      return '<option value="' + y + '"' + (y === selV ? ' selected' : '') + '>Ano de ' + y + '</option>';
+    }).join('') + '</optgroup>';
+  }
+
+  /* ---------- cálculos (sempre no período escolhido) ---------- */
   function calcFinanceiro() {
-    var t = hoje(), ym = ymOf(t), fim = new Date(t.getFullYear(), t.getMonth() + 1, 0);
+    var t = hoje(), fim = fimPer();
     var venc = 0, aVencer = 0, cliVenc = {}, prev = 0, rec = 0;
     (DATA.receber || []).forEach(function (x) {
       var v = moneyN(x.Valor), d = parseD(x.Vencimento); if (!d) return;
-      if (mesDe(x.Vencimento) === ym) { prev += v; if (sim(x.Recebido)) rec += v; }
+      var dentro = noPer(mesDe(x.Vencimento));
+      if (dentro) { prev += v; if (sim(x.Recebido)) rec += v; }
       if (sim(x.Recebido)) return;
-      if (d < t) { venc += v; cliVenc[String(x.Cliente).trim().toLowerCase()] = 1; }
-      else if (d <= fim) aVencer += v;
+      if (d < t && d <= fim) { venc += v; cliVenc[String(x.Cliente).trim().toLowerCase()] = 1; }   // atraso acumulado até o fim do período
+      else if (d >= t && dentro) aVencer += v;
     });
-    return { venc: venc, aVencer: aVencer, clientes: Object.keys(cliVenc).length, prev: prev, rec: rec, ym: ym };
+    return { venc: venc, aVencer: aVencer, clientes: Object.keys(cliVenc).length, prev: prev, rec: rec };
   }
   function calcComissoes() {
-    var ym = ymOf(hoje()), tot = 0, pessoas = {};
+    var ms = perMeses(), lim = ms[ms.length - 1], tot = 0, pessoas = {};
     (DATA.parcelas || []).forEach(function (p) {
       if (/pago/i.test(p.Status || '') || String(p.DataPaga || '').trim()) return;
-      var m = mesDe(p.Mes); if (m && m > ym) return;
+      var m = mesDe(p.Mes); if (m && m > lim) return;
       tot += moneyN(p.ValorParcela); if (p.Advogado) pessoas[p.Advogado] = 1;
     });
     return { tot: tot, pessoas: Object.keys(pessoas).length };
   }
   function calcPropostas() {
-    var ano = String(hoje().getFullYear()), a = 0, ac = 0, ng = 0, vAc = 0;
+    var a = 0, ac = 0, ng = 0, vAc = 0;
     (DATA.propostas || []).forEach(function (p) {
       var s = String(p.Status || '').toLowerCase();
       if (/an[aá]lise/.test(s)) { a++; return; }
-      if (String(p.DataEnvio || '').slice(0, 4) !== ano) return;
+      if (!noPer(mesDe(p.DataEnvio))) return;
       if (/aceita/.test(s)) { ac++; vAc += moneyN(p.Valor); } else if (/negada/.test(s)) ng++;
     });
-    return { analise: a, aceitas: ac, negadas: ng, valorAceito: vAc, ano: ano, conv: (ac + ng) ? ac / (ac + ng) * 100 : 0 };
+    return { analise: a, aceitas: ac, negadas: ng, valorAceito: vAc, conv: (ac + ng) ? ac / (ac + ng) * 100 : 0 };
   }
-  // Último mês (até o atual) com horas lançadas na Rentabilidade
-  function mesHoras() {
-    var lim = ymOf(hoje()), best = '';
+  function temHoras(m) {
+    return (DATA.rentabilidade || []).some(function (x) { return mesDe(x.Mes) === m && ((Number(x.HorasConsultivo) || 0) + (Number(x.HorasProcessual) || 0)) > 0; });
+  }
+  // Meses de horas usados: os do período; se o mês escolhido ainda não tem horas, usa o último mês anterior que tenha.
+  function mesesHoras() {
+    var per = perAtual();
+    if (per.tipo === 'ano') return { meses: perMeses().filter(temHoras), nome: 'ano de ' + per.ano, aviso: '' };
+    if (temHoras(per.ym)) return { meses: [per.ym], nome: perNome(), aviso: '' };
+    var best = '';
     (DATA.rentabilidade || []).forEach(function (x) {
-      var m = mesDe(x.Mes); var h = (Number(x.HorasConsultivo) || 0) + (Number(x.HorasProcessual) || 0);
-      if (h > 0 && m && m <= lim && m > best) best = m;
+      var m = mesDe(x.Mes), h = (Number(x.HorasConsultivo) || 0) + (Number(x.HorasProcessual) || 0);
+      if (h > 0 && m && m < per.ym && m > best) best = m;
     });
-    return best;
+    return best ? { meses: [best], nome: perNome({ tipo: 'mes', ym: best }), aviso: 'sem horas em ' + perNome() + '; mostrando ' + perNome({ tipo: 'mes', ym: best }) } : { meses: [], nome: perNome(), aviso: '' };
   }
-  function calcHorasRent(m) {
-    var out = { mes: m, total: 0, dentro: 0, extra: 0, top: [], margem: 0, rentaveis: 0, n: 0 };
-    if (!m || typeof rentClienteStats !== 'function') return out;
+  function calcHorasRent(meses) {
+    var out = { total: 0, dentro: 0, extra: 0, top: [], margem: 0, rentaveis: 0, n: 0 };
+    if (!meses.length || typeof rentClienteStats !== 'function') return out;
     var saveH = (typeof RT_HTIPO !== 'undefined') ? RT_HTIPO : null;
     try { if (saveH !== null) RT_HTIPO = 'ambas'; } catch (e) {}
     var faixa = Number(CFG && CFG.FaixaRentavel) || 30;
@@ -107,14 +154,18 @@
     });
     var lista = [];
     rentUniverse().forEach(function (cli) {
-      var st = rentClienteStats(cli, m);
-      if (!(st.horas > 0)) return;
       var info = mens[cli] || { tipo: '', valor: 0 };
       if (info.tipo.indexOf('pontual') >= 0) return;          // só contratos mensais
-      out.total += st.horas;
-      var c = contr[cli] || 0;
-      if (c > 0) { out.dentro += Math.min(st.horas, c); out.extra += Math.max(0, st.horas - c); } else out.dentro += st.horas;
-      lista.push({ cli: cli, horas: st.horas, valor: info.valor, margem: st.margem, pago: st.pago });
+      var c = contr[cli] || 0, ag = { cli: cli, horas: 0, pago: 0, custo: 0, valor: info.valor };
+      meses.forEach(function (m) {
+        var st = rentClienteStats(cli, m); if (!(st.horas > 0) && !(st.pago > 0)) return;
+        ag.horas += st.horas; ag.pago += st.pago; ag.custo += st.custo;
+        if (c > 0) { out.dentro += Math.min(st.horas, c); out.extra += Math.max(0, st.horas - c); } else out.dentro += st.horas;
+      });
+      if (!(ag.horas > 0)) return;
+      out.total += ag.horas;
+      ag.margem = ag.pago > 0 ? (ag.pago - ag.custo) / ag.pago * 100 : (ag.custo > 0 ? -100 : 0);
+      lista.push(ag);
     });
     try { if (saveH !== null) RT_HTIPO = saveH; } catch (e) {}
     var comPago = lista.filter(function (x) { return x.pago > 0; });
@@ -146,10 +197,10 @@
     return s;
   }
   function ehDespesa(x) { return !naoDespesaSet()[catNome(x.Categoria).toLowerCase()]; }
-  function calcSaidas(ym) {
+  function calcSaidas() {
     var nd = naoDespesaSet(), o = { prev: 0, pago: 0, fora: 0, foraPago: 0, porCat: {}, foraCat: {} };
     (DATA.pagar || []).forEach(function (x) {
-      if (mesDe(x.Data) !== ym) return;
+      if (!noPer(mesDe(x.Data))) return;
       var v = moneyN(x.Valor), c = catNome(x.Categoria), pg = sim(x.Pago);
       if (nd[c.toLowerCase()]) { o.fora += v; if (pg) o.foraPago += v; o.foraCat[c] = (o.foraCat[c] || 0) + v; return; }
       o.prev += v; if (pg) o.pago += v; o.porCat[c] = (o.porCat[c] || 0) + v;
@@ -157,8 +208,9 @@
     return o;
   }
   function calcEvolucao() {
-    var ym = ymOf(hoje()), meses = [];
-    for (var i = -6; i <= 0; i++) meses.push(ymAdd(ym, i));
+    var per = perAtual(), meses = [];
+    if (per.tipo === 'ano') meses = perMeses(per);
+    else for (var i = -6; i <= 0; i++) meses.push(ymAdd(per.ym, i));
     var r = {}, a = {};
     meses.forEach(function (m) { r[m] = 0; a[m] = 0; });
     (DATA.receber || []).forEach(function (x) {
@@ -254,56 +306,59 @@
 
     var vf = $('v-financeiro');
     if (vf && !$('finRow3')) {
-      vf.innerHTML = '<div id="finHead">' + lbl('Dados financeiros') + '<h1 class="dh-hello">Visão financeira do escritório</h1><div class="dh-sub dh-hello-sub">Recebimentos, cobranças, comissões, horas e rentabilidade.</div></div>' +
+      vf.innerHTML = '<div id="finHead" class="fin-head"><div>' + lbl('Dados financeiros') + '<h1 class="dh-hello">Visão financeira do escritório</h1><div class="dh-sub dh-hello-sub" id="finSub"></div></div>' +
+        '<label class="fin-per"><span>Período</span><select id="finPer" onchange="dhSetPeriodo(this.value)"></select></label></div>' +
         '<div id="finRow3" class="dh-grid g3"></div><div id="dhRow4" class="dh-grid g3"></div><div id="dhRow5" class="dh-grid g2"></div>';
     }
     if ($('dashBtns')) $('dashBtns').style.display = 'none';
+    if ($('finPer')) $('finPer').innerHTML = opcoesPeriodo();
+    if ($('finSub')) $('finSub').innerHTML = 'Mostrando <b>' + perNome() + '</b> · recebimentos, cobranças, saídas, comissões, horas e rentabilidade.';
     var f = calcFinanceiro(), cm = calcComissoes(), pr = calcPropostas();
     var pct = f.prev > 0 ? f.rec / f.prev * 100 : 0;
     $('finRow3').innerHTML =
       '<div class="card dh-card dh-alert" onclick="goToReceberInad()">' + lbl('Financeiro — requer atenção') +
-        '<div class="dh-row"><span class="dh-ico warn">' + ic('bag', 24) + '</span><div>' + lbl('Clientes com pagamento atrasado') +
+        '<div class="dh-row"><span class="dh-ico warn">' + ic('bag', 24) + '</span><div>' + lbl('Clientes com pagamento atrasado' + (perAtual().tipo === 'mes' && perAtual().ym === ymOf(hoje()) ? '' : ' até ' + perNome())) +
         '<div class="dh-big"><b>' + f.clientes + '</b> cliente' + (f.clientes === 1 ? '' : 's') + '</div>' +
         '<div class="dh-money warn">' + brl0(f.venc) + ' <small>em atraso</small></div></div></div>' +
-        '<div class="dh-split"><div><span>Vencidos</span><b>' + brl0(f.venc) + '</b></div><div><span>A vencer no mês</span><b>' + brl0(f.aVencer) + '</b></div>' +
+        '<div class="dh-split"><div><span>Vencidos</span><b>' + brl0(f.venc) + '</b></div><div><span>A vencer ' + (perAtual().tipo === 'ano' ? 'no ano' : 'no mês') + '</span><b>' + brl0(f.aVencer) + '</b></div>' +
         '<button class="btn soft" onclick="event.stopPropagation();goToReceberInad()">Ver cobranças ' + ic('arrow', 15) + '</button></div></div>' +
-      '<div class="card dh-card" onclick="goTo(\'receber\')">' + lbl('Recebimentos do mês') +
-        '<div class="dh-row"><span class="dh-ico">' + ic('bars', 24) + '</span><div><div class="dh-money">' + brl0(f.rec) + '</div><div class="dh-sub">recebido até hoje</div></div></div>' +
-        bar([[pct, 'b1']]) + '<div class="dh-legend"><span>Previsto no mês: ' + brl0(f.prev) + '</span><b>' + Math.round(pct) + '%</b></div></div>' +
+      '<div class="card dh-card" onclick="goTo(\'receber\')">' + lbl('Recebimentos · ' + perNome()) +
+        '<div class="dh-row"><span class="dh-ico">' + ic('bars', 24) + '</span><div><div class="dh-money">' + brl0(f.rec) + '</div><div class="dh-sub">recebido no período</div></div></div>' +
+        bar([[pct, 'b1']]) + '<div class="dh-legend"><span>Previsto: ' + brl0(f.prev) + '</span><b>' + Math.round(pct) + '%</b></div></div>' +
       '<div class="card dh-card" onclick="goTo(\'comissoes\')">' + lbl('Comissões pendentes') +
-        '<div class="dh-row"><span class="dh-ico">' + ic('user', 24) + '</span><div><div class="dh-money">' + brl0(cm.tot) + '</div><div class="dh-sub">em parcelas a pagar até este mês</div></div></div>' +
+        '<div class="dh-row"><span class="dh-ico">' + ic('user', 24) + '</span><div><div class="dh-money">' + brl0(cm.tot) + '</div><div class="dh-sub">parcelas não pagas até ' + perNome() + '</div></div></div>' +
         '<div class="dh-foot"><span><b>' + cm.pessoas + '</b> pessoa' + (cm.pessoas === 1 ? '' : 's') + '</span>' + ic('chev', 18) + '</div></div>';
 
-    var sd = calcSaidas(f.ym), pS = sd.prev > 0 ? sd.pago / sd.prev * 100 : 0;
+    var sd = calcSaidas(), pS = sd.prev > 0 ? sd.pago / sd.prev * 100 : 0;
     var resultado = f.rec - sd.pago, resPrev = f.prev - sd.prev;
     var cats = Object.keys(sd.porCat).sort(function (a, b) { return sd.porCat[b] - sd.porCat[a]; });
     var maxCat = cats.length ? sd.porCat[cats[0]] : 1;
     var foraTxt = Object.keys(sd.foraCat).map(function (c) { return esc(c) + ' ' + brl0(sd.foraCat[c]); }).join(' · ');
     var rS = ensureIn('finRowS', 'finRow3', 'dh-grid g3');
     rS.innerHTML =
-      '<div class="card dh-card" onclick="goTo(\'pagar\')">' + lbl('Saídas do mês — despesas') +
-        '<div class="dh-row"><span class="dh-ico out">' + ic('out', 24) + '</span><div><div class="dh-money">' + brl0(sd.prev) + '</div><div class="dh-sub">previsto em despesas no mês</div></div></div>' +
+      '<div class="card dh-card" onclick="goTo(\'pagar\')">' + lbl('Saídas · despesas · ' + perNome()) +
+        '<div class="dh-row"><span class="dh-ico out">' + ic('out', 24) + '</span><div><div class="dh-money">' + brl0(sd.prev) + '</div><div class="dh-sub">previsto em despesas no período</div></div></div>' +
         bar([[pS, 'b3']]) + '<div class="dh-legend"><span>Pago até agora: ' + brl0(sd.pago) + '</span><b>' + Math.round(pS) + '%</b></div></div>' +
-      '<div class="card dh-card">' + lbl('Resultado do mês') +
+      '<div class="card dh-card">' + lbl('Resultado · ' + perNome()) +
         '<div class="dh-row"><span class="dh-ico ' + (resultado < 0 ? 'warn' : 'ok') + '">' + ic('bars', 24) + '</span><div><div class="dh-money ' + (resultado < 0 ? 'warn' : 'pos') + '">' + brl0(resultado) + '</div><div class="dh-sub">recebido − despesas pagas</div></div></div>' +
-        '<div class="dh-split"><div><span>Previsto no mês</span><b>' + brl0(resPrev) + '</b></div><div><span>Fora das despesas</span><b>' + brl0(sd.fora) + '</b></div></div></div>' +
-      '<div class="card dh-card" onclick="goTo(\'pagar\')">' + lbl('Despesas por categoria') +
+        '<div class="dh-split"><div><span>Previsto no período</span><b>' + brl0(resPrev) + '</b></div><div><span>Fora das despesas</span><b>' + brl0(sd.fora) + '</b></div></div></div>' +
+      '<div class="card dh-card" onclick="goTo(\'pagar\')">' + lbl('Despesas por categoria · ' + perNome()) +
         (cats.length ? '<div class="dh-cats">' + cats.slice(0, 6).map(function (c) {
           return '<div class="dh-cat"><span>' + esc(c) + '</span><div class="dh-bar"><span class="b3" style="width:' + (sd.porCat[c] / maxCat * 100).toFixed(1) + '%"></span></div><b>' + brl0(sd.porCat[c]) + '</b></div>';
-        }).join('') + '</div>' : '<div class="empty">Sem contas a pagar neste mês.</div>') +
+        }).join('') + '</div>' : '<div class="empty">Sem contas a pagar no período.</div>') +
         (foraTxt ? '<div class="dh-sub dh-fora">Não contam como despesa: ' + foraTxt + '</div>' : '') + '</div>';
 
-    var mh = mesHoras(), hr = calcHorasRent(mh);
-    var mhNome = mh ? MES_L[+mh.slice(5) - 1].toLowerCase() + (mh.slice(0, 4) !== String(t.getFullYear()) ? '/' + mh.slice(0, 4) : '') : '';
+    var mh = mesesHoras(), hr = calcHorasRent(mh.meses);
+    var mhNome = mh.nome + (mh.aviso ? ' *' : '');
     var pD = hr.total ? hr.dentro / hr.total * 100 : 0, pE = hr.total ? hr.extra / hr.total * 100 : 0;
     var pR = hr.n ? hr.rentaveis / hr.n * 100 : 0;
     var r4 = $('dhRow4');
     r4.innerHTML =
       '<div class="card dh-card" onclick="goTo(\'propostas\')"><div class="dh-row top"><span class="dh-ico">' + ic('doc', 24) + '</span><div style="flex:1">' + lbl('Propostas') +
-        '<div class="dh-list"><div><b>' + pr.analise + '</b> em análise</div><div><b>' + pr.aceitas + '</b> aceitas em ' + pr.ano + '</div><div><b>' + pr.negadas + '</b> negadas em ' + pr.ano + '</div></div>' +
-        '<div class="dh-sub">Conversão no ano: <b>' + Math.round(pr.conv) + '%</b> · ' + brl0(pr.valorAceito) + ' fechados</div></div>' + '<span class="dh-chev">' + ic('chev', 18) + '</span></div></div>' +
+        '<div class="dh-list"><div><b>' + pr.analise + '</b> em análise</div><div><b>' + pr.aceitas + '</b> aceitas ' + perCurto() + '</div><div><b>' + pr.negadas + '</b> negadas ' + perCurto() + '</div></div>' +
+        '<div class="dh-sub">Conversão ' + perCurto() + ': <b>' + Math.round(pr.conv) + '%</b> · ' + brl0(pr.valorAceito) + ' fechados</div></div>' + '<span class="dh-chev">' + ic('chev', 18) + '</span></div></div>' +
       '<div class="card dh-card" onclick="goTo(\'rent\')"><div class="dh-row top"><span class="dh-ico">' + ic('clock', 24) + '</span><div style="flex:1">' + lbl('Horas dos mensalistas' + (mhNome ? ' · ' + mhNome : '')) +
-        '<div class="dh-big"><b>' + num(hr.total) + ' h</b> utilizadas</div>' + bar([[pD, 'b1'], [pE, 'b2']]) +
+        '<div class="dh-big"><b>' + num(hr.total) + ' h</b> utilizadas</div>' + (mh.aviso ? '<div class="dh-sub dh-aviso">* ' + mh.aviso + '</div>' : '') + bar([[pD, 'b1'], [pE, 'b2']]) +
         '<div class="dh-key"><span><i class="k1"></i>Dentro do contrato</span><b>' + Math.round(pD) + '%</b></div><div class="dh-key"><span><i class="k2"></i>Extrapoladas</span><b>' + Math.round(pE) + '%</b></div></div></div></div>' +
       '<div class="card dh-card" onclick="goTo(\'rent\')"><div class="dh-row top"><span class="dh-ico">' + ic('bars', 24) + '</span><div style="flex:1">' + lbl('Rentabilidade dos contratos' + (mhNome ? ' · ' + mhNome : '')) +
         '<div class="dh-big"><b>' + Math.round(hr.margem) + '%</b> margem média</div>' + bar([[pR, 'b1']]) +
