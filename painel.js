@@ -218,7 +218,9 @@
       if (sim(x.Recebido)) r[m] += moneyN(x.Valor); else a[m] += moneyN(x.Valor);
     });
     var d = {}; meses.forEach(function (m) { d[m] = 0; });
-    (DATA.pagar || []).forEach(function (x) { var m = mesDe(x.Data); if (m in d && ehDespesa(x)) d[m] += moneyN(x.Valor); });
+    var comExt = {};
+    (DATA.extrato || []).forEach(function (x) { var m = mesDe(x.Data); if (m in d) { comExt[m] = 1; if (x.Classe === 'Despesa') d[m] += -moneyN(x.Valor); } });
+    (DATA.pagar || []).forEach(function (x) { var m = mesDe(x.Data); if (m in d && !comExt[m] && ehDespesa(x)) d[m] += moneyN(x.Valor); });
     return meses.map(function (m) { return { m: m, rec: r[m], arec: a[m], desp: d[m] }; });
   }
 
@@ -335,6 +337,23 @@
     var maxCat = cats.length ? sd.porCat[cats[0]] : 1;
     var foraTxt = Object.keys(sd.foraCat).map(function (c) { return esc(c) + ' ' + brl0(sd.foraCat[c]); }).join(' · ');
     var rS = ensureIn('finRowS', 'finRow3', 'dh-grid g3');
+    // com extrato bancário importado no período, as saídas e o resultado vêm do que de fato saiu do banco
+    var ex = typeof window.dhExtratoResumo === 'function' ? window.dhExtratoResumo(function (ym) { return noPer(ym); }) : null;
+    if (ex) {
+      var exCats = Object.keys(ex.catD).sort(function (a, b) { return ex.catD[b] - ex.catD[a]; }), exMax = exCats.length ? ex.catD[exCats[0]] : 1;
+      rS.innerHTML =
+        '<div class="card dh-card" onclick="goTo(\'extrato\')">' + lbl('Saídas · despesas · ' + perNome()) +
+          '<div class="dh-row"><span class="dh-ico out">' + ic('out', 24) + '</span><div><div class="dh-money">' + brl0(ex.desp) + '</div><div class="dh-sub">despesas pagas (extrato bancário)</div></div></div>' +
+          '<div class="dh-split"><div><span>Pró-labore Mariana</span><b>' + brl0(ex.pro) + '</b></div><div><span>Retiradas Mariana</span><b>' + brl0(ex.ret) + '</b></div></div>' +
+          (ex.penN ? '<div class="dh-sub dh-aviso">⚠ ' + ex.penN + ' lançamento(s) do extrato a classificar</div>' : '') + '</div>' +
+        '<div class="card dh-card" onclick="goTo(\'extrato\')">' + lbl('Lucro real · ' + perNome()) +
+          '<div class="dh-row"><span class="dh-ico ' + (ex.lucro < 0 ? 'warn' : 'ok') + '">' + ic('bars', 24) + '</span><div><div class="dh-money ' + (ex.lucro < 0 ? 'warn' : 'pos') + '">' + brl0(ex.lucro) + '</div><div class="dh-sub">receitas − despesas − pró-labore</div></div></div>' +
+          '<div class="dh-split"><div><span>Receitas no extrato</span><b>' + brl0(ex.rec) + '</b></div><div><span>Ficou na empresa</span><b>' + brl0(ex.ficou) + '</b></div></div></div>' +
+        '<div class="card dh-card" onclick="goTo(\'extrato\')">' + lbl('Despesas por categoria · ' + perNome()) +
+          (exCats.length ? '<div class="dh-cats">' + exCats.slice(0, 6).map(function (c) {
+            return '<div class="dh-cat"><span>' + esc(c) + '</span><div class="dh-bar"><span class="b3" style="width:' + (ex.catD[c] / exMax * 100).toFixed(1) + '%"></span></div><b>' + brl0(ex.catD[c]) + '</b></div>';
+          }).join('') + '</div>' + (exCats.length > 6 ? '<div class="dh-sub dh-fora">+ ' + (exCats.length - 6) + ' categorias · ver tudo no Extrato bancário</div>' : '') : '<div class="empty">Sem despesas no extrato.</div>') + '</div>';
+    } else
     rS.innerHTML =
       '<div class="card dh-card" onclick="goTo(\'pagar\')">' + lbl('Saídas · despesas · ' + perNome()) +
         '<div class="dh-row"><span class="dh-ico out">' + ic('out', 24) + '</span><div><div class="dh-money">' + brl0(sd.prev) + '</div><div class="dh-sub">previsto em despesas no período</div></div></div>' +
