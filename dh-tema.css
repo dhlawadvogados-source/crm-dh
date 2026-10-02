@@ -422,3 +422,13 @@ html,body{background:linear-gradient(to right,var(--dh-marinho) 0,var(--dh-marin
 .ex-ca-ct{font-size:10px;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);background:#EEF1FB;border-radius:10px;padding:2px 7px;margin-left:4px;}
 .ex-mar td.neg{color:#c33350;}
 .ex-dre small a{color:var(--dh-azul);}
+/* Dados financeiros: novo layout */
+#finEvo.dh-grid.g2{grid-template-columns:1.5fr 1fr;}
+#finEvo .dh-card:first-child{cursor:default;}
+.dh-chart .ln{fill:none;stroke:#1f9254;stroke-width:2.5;stroke-linejoin:round;}
+.dh-chart .dot{fill:#fff;stroke:#1f9254;stroke-width:2.5;}
+.dh-chart .dot.neg{stroke:#c33350;}
+.dh-chart .z0{stroke:#B8C0D6;stroke-width:1;stroke-dasharray:3 3;}
+.kl{background:#1f9254;height:3px !important;border-radius:2px;}
+.dh-lucro{border-top:3px solid #1f9254;}
+@media (max-width:860px){ #finEvo.dh-grid.g2,#finMid.dh-grid.g2{grid-template-columns:1fr !important;} }
