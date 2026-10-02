@@ -20,7 +20,7 @@
   var SHEET_ID = String(CFG.SPREADSHEET_ID || '').trim();
   var SCOPES = 'https://www.googleapis.com/auth/spreadsheets openid email';
   var STALE_MS = (CFG.RECARREGAR_APOS_SEGUNDOS || 20) * 1000;
-  var BACKEND_URL = CFG.BACKEND_URL || 'js/codigo.js';
+  var BACKEND_URL = CFG.BACKEND_URL || 'codigo.js';
   var H2C_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
   var JSPDF_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js';
 
