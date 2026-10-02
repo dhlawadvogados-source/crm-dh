@@ -408,11 +408,71 @@
     if (k !== 'sel') ESTADO.sel = {}; ESTADO.limite = 200; render();
   };
 
+  /* ---------- o que NÃO entra na conta (categorias e palavras escolhidas pela usuária) ---------- */
+  function lerLista(k) { try { var v = JSON.parse((CFG && CFG[k]) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
+  function foraCfg() {
+    var cats = {}; lerLista('ExtratoForaCats').forEach(function (c) { cats[norm(c)] = c; });
+    return { cats: cats, textos: lerLista('ExtratoForaTexto').map(norm).filter(Boolean) };
+  }
+  var FCFG = null;
+  function motivoFora(x) {
+    var c = x.Classe || CL.PEN; if (c !== CL.REC && c !== CL.DESP) return '';
+    var f = FCFG || foraCfg();
+    if (x.Categoria && f.cats[norm(x.Categoria)]) return 'categoria "' + x.Categoria + '"';
+    var t = norm((x.Descricao || '') + ' ' + (x.Categoria || '') + ' ' + (x.Obs || ''));
+    for (var i = 0; i < f.textos.length; i++) if (t.indexOf(f.textos[i]) >= 0) return 'contém "' + f.textos[i] + '"';
+    return '';
+  }
+  function classeEf(x) { return motivoFora(x) ? CL.FORA : (x.Classe || CL.PEN); }
+  function salvarLista(k, arr) {
+    var json = JSON.stringify(arr); CFG[k] = json; FCFG = null;
+    google.script.run.withFailureHandler(function (e) { alert('Não consegui salvar: ' + e.message); }).apiSetConfig(k, json);
+    render(); if (typeof window.renderDash === 'function') window.renderDash();
+  }
+  window.dhExForaCat = function (cat, fora) {
+    var l = lerLista('ExtratoForaCats').filter(function (c) { return norm(c) !== norm(cat); }); if (fora) l.push(cat);
+    salvarLista('ExtratoForaCats', l); if ($('exEscolher')) escolher(); else if (DET) detalhe();
+  };
+  window.dhExForaTexto = function (txt, fora) {
+    txt = String(txt || '').trim(); if (!txt) return;
+    var l = lerLista('ExtratoForaTexto').filter(function (c) { return norm(c) !== norm(txt); }); if (fora) l.push(txt);
+    salvarLista('ExtratoForaTexto', l); if ($('exEscolher')) escolher(); else if (DET) detalhe();
+  };
+  function escolher() {
+    FCFG = null; var f = foraCfg();
+    var tot = {}; (DATA.extrato || []).forEach(function (x) {
+      var c = x.Classe; if (c !== CL.REC && c !== CL.DESP) return;
+      var k = (c === CL.REC ? 'E' : 'S') + '|' + (x.Categoria || 'Outros'); tot[k] = (tot[k] || 0) + Math.abs(num(x.Valor));
+    });
+    function grupo(tipo, titulo) {
+      var ks = Object.keys(tot).filter(function (k) { return k.charAt(0) === tipo; }).sort(function (a, b) { return tot[b] - tot[a]; });
+      if (!ks.length) return '';
+      return '<div class="msec">' + titulo + '</div><div class="ex-esc-grid">' + ks.map(function (k) {
+        var cat = k.slice(2), on = !f.cats[norm(cat)];
+        return '<label class="ex-esc' + (on ? '' : ' off') + '"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="dhExForaCat(' + esc(JSON.stringify(cat)) + ',!this.checked)"><span>' + esc(cat) + '</span><b>' + brl(tot[k]) + '</b></label>';
+      }).join('') + '</div>';
+    }
+    var textos = lerLista('ExtratoForaTexto');
+    var h = '<div class="mhead" id="exEscolher"><button class="mclose" onclick="dhExFecharEsc()">✕</button><h2>O que entra na conta</h2></div><div class="mbody">' +
+      '<div class="miuda" style="margin-bottom:12px">Desmarque o que <b>não</b> deve entrar nas entradas, saídas e no lucro real. Não apaga nada: dá para marcar de novo quando quiser. Vale para todos os meses.</div>' +
+      '<div class="msec">Nomes ou palavras que nunca entram</div>' +
+      '<div class="miuda" style="margin-bottom:8px">Ex.: <b>TIER</b>. Qualquer lançamento com essa palavra na descrição, no fornecedor/cliente ou na categoria fica fora da conta.</div>' +
+      '<div class="ex-esc-add"><input id="exEscTxt" placeholder="Digite um nome ou palavra (ex.: TIER)" onkeydown="if(event.key===\'Enter\'){dhExForaTexto(this.value,true)}"><button class="btn" onclick="dhExForaTexto(document.getElementById(\'exEscTxt\').value,true)">Adicionar</button></div>' +
+      (textos.length ? '<div class="ex-esc-tags">' + textos.map(function (t) { return '<span class="ex-esc-tag">' + esc(t) + ' <a href="#" onclick="event.preventDefault();dhExForaTexto(' + esc(JSON.stringify(t)) + ',false)">✕</a></span>'; }).join('') + '</div>' : '') +
+      grupo('E', 'Categorias de entrada') + grupo('S', 'Categorias de saída') +
+      (Object.keys(tot).length ? '' : '<div class="empty">Importe um extrato para ver as categorias.</div>') +
+      '</div><div class="mfoot"><button class="btn" onclick="dhExFecharEsc()">Pronto</button></div>';
+    el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
+  }
+  window.dhExEscolher = function () { escolher(); };
+  window.dhExFecharEsc = function () { if (DET) detalhe(); else closeModal(); };
+
   /* ---------- cálculo do resumo ---------- */
   function resumo(lista) {
+    FCFG = foraCfg();
     var r = { rec: 0, desp: 0, proPago: 0, ret: 0, apo: 0, apl: 0, trf: 0, out: 0, pen: 0, penN: 0, graRec: 0, graDesp: 0, catD: {}, catR: {} }, meses = {};
     lista.forEach(function (x) {
-      var v = num(x.Valor), c = x.Classe || CL.PEN; meses[ymOf(x.Data)] = 1;
+      var v = num(x.Valor), c = classeEf(x); meses[ymOf(x.Data)] = 1;
       if (c === CL.REC) { r.rec += v; var k = x.Categoria || 'Outros'; r.catR[k] = (r.catR[k] || 0) + v; }
       else if (c === CL.DESP) { r.desp += -v; var k2 = x.Categoria || 'Outros'; r.catD[k2] = (r.catD[k2] || 0) + (-v); }
       else if (c === CL.PRO) r.proPago += -v;
@@ -465,6 +525,7 @@
       '<label class="fin-per"><span>Conta</span><select onchange="dhExSet(\'conta\',this.value)"><option value="">Todas as contas</option>' + Object.keys(contas).sort().map(function (c) { return '<option' + (c === ESTADO.conta ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label></div></div>' +
       '<div class="ex-acoes"><button class="btn" onclick="document.getElementById(\'exArq\').click()">⬆ Importar extrato</button><input type="file" id="exArq" accept=".ofx,.OFX,.csv,.txt,.xlsx,.xls" style="display:none" onchange="dhExImportar(this)">' +
       '<button class="btn ghost dh-modelo" onclick="dhExModelo()">Modelo</button>' +
+      '<button class="btn ghost" onclick="dhExEscolher()">O que entra na conta</button>' +
       '<button class="btn ghost" onclick="dhExRegras()">Regras de classificação (' + regras().length + ')</button>' +
       '<button class="btn ghost" onclick="dhExAplicarRegras()">Aplicar regras nos "A classificar"</button>' +
       '<span class="miuda">Aceita o Excel do <b>Conta Azul</b> (Finanças › Extrato › Exportar) e o extrato do BB/Caixa em <b>OFX</b>, CSV ou Excel.</span></div>';
@@ -746,8 +807,9 @@
   function detalhe() {
     if (!DET) return;
     var t = DET.tipo, doPer = (DATA.extrato || []).filter(noFiltro), r = resumo(doPer);
+    FCFG = foraCfg();
     function entra(x) {
-      var c = x.Classe || CL.PEN;
+      var c = classeEf(x);
       if (t === 'ent') return c === CL.REC;
       if (t === 'sai') return c === CL.DESP && (!DET.cat || (x.Categoria || 'Outros') === DET.cat);
       return c === CL.REC || c === CL.DESP;
@@ -756,24 +818,25 @@
     var lista = doPer.filter(entra).filter(function (x) { return !q || norm(x.Descricao + ' ' + x.Categoria + ' ' + x.Conta).indexOf(q) >= 0; })
       .sort(function (a, b) { return Math.abs(num(b.Valor)) - Math.abs(num(a.Valor)); });
     var fora = doPer.filter(function (x) {
-      if (x.Classe !== CL.FORA) return false; var v = num(x.Valor);
+      if (classeEf(x) !== CL.FORA) return false; var v = num(x.Valor);
       if (t === 'ent') return v > 0; if (t === 'sai') return v < 0 && (!DET.cat || (x.Categoria || 'Outros') === DET.cat); return true;
     });
     var titulo = t === 'ent' ? 'Entradas consideradas' : (t === 'sai' ? (DET.cat ? 'Despesas · ' + DET.cat : 'Saídas consideradas') : 'O que entra no lucro real');
     var tot = lista.reduce(function (a, x) { return a + num(x.Valor); }, 0);
     function linha(x, foraDaConta) {
-      var id = esc(String(x.ID)), v = num(x.Valor);
-      return '<tr' + (foraDaConta ? ' class="ex-det-fora"' : '') + '><td class="ex-dt">' + fmtD(x.Data) + '</td><td class="ex-desc">' + esc(x.Descricao) + '<small>' + esc(x.Categoria || '—') + ' · ' + esc(x.Conta || '') + '</small></td>' +
-        '<td class="r ex-v ' + (v < 0 ? 'neg' : 'pos') + '">' + brl(v) + '</td><td class="r">' +
-        (foraDaConta ? '<button class="btn ghost fc-mini" onclick="dhExRecolocar(\'' + id + '\')">Recolocar</button>'
-                     : '<button class="btn ghost fc-mini ex-tirar" onclick="dhExTirar(\'' + id + '\')">Tirar da conta</button>') + '</td></tr>';
+      var id = esc(String(x.ID)), v = num(x.Valor), mot = foraDaConta ? motivoFora(x) : '', catJ = esc(JSON.stringify(x.Categoria || 'Outros'));
+      return '<tr' + (foraDaConta ? ' class="ex-det-fora"' : '') + '><td class="ex-dt">' + fmtD(x.Data) + '</td><td class="ex-desc">' + esc(x.Descricao) + '<small>' + esc(x.Categoria || '—') + ' · ' + esc(x.Conta || '') + (mot ? ' · <b>fora por ' + esc(mot) + '</b>' : '') + '</small></td>' +
+        '<td class="r ex-v ' + (v < 0 ? 'neg' : 'pos') + '">' + brl(v) + '</td><td class="r fc-acoes">' +
+        (foraDaConta ? (mot ? '<button class="btn ghost fc-mini" onclick="dhExEscolher()">Ajustar</button>' : '<button class="btn ghost fc-mini" onclick="dhExRecolocar(\'' + id + '\')">Recolocar</button>')
+                     : '<button class="btn ghost fc-mini ex-tirar" onclick="dhExTirar(\'' + id + '\')">Tirar este</button> <button class="btn ghost fc-mini ex-tirar" title="Tirar todos os lançamentos desta categoria" onclick="dhExForaCat(' + catJ + ',true)">Tirar a categoria</button>') + '</td></tr>';
     }
     var h = '<div class="mhead"><button class="mclose" onclick="dhExFecharDet()">✕</button><h2>' + esc(titulo) + '</h2><div class="mtags"><span class="tag b">' + lista.length + ' lançamento(s)</span>' + (t === 'luc' ? '' : '<span class="tag">' + brl(tot) + '</span>') + '</div></div><div class="mbody">' +
       (t !== 'ent' ? '<div class="ex-box" style="margin:0 0 12px">' +
         (t === 'luc' ? '<div class="ex-box-l"><span>Entradas</span><b>' + brl(r.rec) + '</b></div><div class="ex-box-l"><span>(−) Despesas</span><b>' + brl(-r.desp) + '</b></div>' : '') +
         (t === 'luc' || (t === 'sai' && !DET.cat) ? '<div class="ex-box-l"><span>(−) Salário da Mariana · ' + brl(r.salario) + ' × ' + r.meses + ' mês(es) · <a href="#" onclick="event.preventDefault();dhExSalario()">alterar</a></span><b>' + brl(-r.pro) + '</b></div>' : '') +
         (t === 'luc' ? '<div class="ex-box-l tot"><span>= Lucro real</span><b>' + brl(r.lucro) + '</b></div>' : '') + '</div>' : '') +
-      '<div class="miuda" style="margin-bottom:8px">"Tirar da conta" não apaga o lançamento: ele vai para "Fora da conta" e pode ser recolocado quando quiser. Para mudar a classe (ex.: virar Retirada Mariana), use a aba Extrato bancário.</div>' +
+      '<div style="margin-bottom:10px"><button class="btn ghost fc-mini" onclick="dhExEscolher()">⚙ Escolher o que entra na conta (categorias e nomes, ex.: TIER)</button></div>' +
+      '<div class="miuda" style="margin-bottom:8px">"Tirar" não apaga o lançamento: ele vai para "Fora da conta" e pode ser recolocado quando quiser. Para mudar a classe (ex.: virar Retirada Mariana), use a aba Extrato bancário.</div>' +
       '<input type="search" class="ex-busca" style="width:100%;margin-bottom:8px" placeholder="Buscar..." value="' + esc(DET.q) + '" oninput="dhExDetBusca(this.value)">' +
       '<div class="scroll ex-det"><table class="dh-tbl ex-tbl"><tbody>' + lista.map(function (x) { return linha(x, false); }).join('') + '</tbody></table>' +
       (lista.length ? '' : '<div class="empty">Nada aqui.</div>') + '</div>' +

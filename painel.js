@@ -312,7 +312,7 @@
     var vf = $('v-financeiro');
     if (vf && !$('finTop')) {
       vf.innerHTML = '<div id="finHead" class="fin-head"><div>' + lbl('Dados financeiros') + '<h1 class="dh-hello">Visão financeira do escritório</h1><div class="dh-sub dh-hello-sub" id="finSub"></div></div>' +
-        '<label class="fin-per"><span>Período</span><select id="finPer" onchange="dhSetPeriodo(this.value)"></select></label></div>' +
+        '<div class="fin-acoes"><button class="btn ghost" onclick="dhExEscolher()">⚙ O que entra na conta</button><label class="fin-per"><span>Período</span><select id="finPer" onchange="dhSetPeriodo(this.value)"></select></label></div></div>' +
         '<div id="finTop" class="dh-grid g3"></div><div id="finEvo" class="dh-grid g2"></div><div id="finMid" class="dh-grid g3"></div>';
     }
     if ($('dashBtns')) $('dashBtns').style.display = 'none';
