@@ -458,3 +458,14 @@ html,body{background:linear-gradient(to right,var(--dh-marinho) 0,var(--dh-marin
 .ex-esc input[type=checkbox]{width:16px !important;height:16px !important;flex:0 0 16px;margin:0;padding:0;}
 .ex-esc span{text-align:left;min-width:0;}
 .ex-esc{text-transform:none;letter-spacing:0;font-weight:500;color:var(--ink);margin:0;}
+.ex-dest-tbl td{font-size:12.5px;padding:6px 8px;vertical-align:middle;}
+.ex-dest-tbl td:last-child{width:230px;}
+.ex-dest{width:100%;max-width:none;}
+.ex-dest-RET{border-color:#A9B5E3;background:#EEF1FB;}
+.ex-dest-GRA{border-color:#F2A97F;background:#FFF8F3;}
+.ex-dest-FORA{border-color:#D5D8E0;background:#F5F5F7;color:#7A8297;}
+.ex-esc-tag.ex-dest-RET{background:#EEF1FB;border-color:#A9B5E3;color:#2B3E85;}
+.ex-esc-tag.ex-dest-GRA{background:#FFF8F3;border-color:#F2A97F;color:#C2541E;}
+.ex-esc-tag.ex-dest-RET a{color:#2B3E85;} .ex-esc-tag.ex-dest-GRA a{color:#C2541E;}
+.ex-esc-add select{height:38px;max-width:200px;}
+.ex-mover{max-width:210px;font-size:11.5px;}

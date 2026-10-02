@@ -256,7 +256,7 @@
     // DAS pago na conta da Domingues & Herold (CEF) é o imposto das notas da Graciola
     if (/SIMPLES|\bDAS\b/.test(c) && /CEF|CAIXA|HEROLD/.test(ct)) return CL.GRA;
     // cartão debitado na Consultoria é de uso só da Mariana
-    if (/CART(AO|OES)/.test(c) && /CONSULTORIA/.test(ct)) return CL.RET;
+    if (/CART(AO|OES)/.test(c) && valor < 0) return CL.RET;
     if (/APLICA|RESGATE|INVESTIMENTO/.test(c)) return CL.APL;
     if (/REPASSE|TRANSFER/.test(c)) return CL.TRF;
     if (/DISTRIBUI|LUCRO|RETIRADA/.test(c)) return CL.RET;
@@ -408,59 +408,107 @@
     if (k !== 'sel') ESTADO.sel = {}; ESTADO.limite = 200; render();
   };
 
-  /* ---------- o que NÃO entra na conta (categorias e palavras escolhidas pela usuária) ---------- */
-  function lerLista(k) { try { var v = JSON.parse((CFG && CFG[k]) || '[]'); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
-  function foraCfg() {
-    var cats = {}; lerLista('ExtratoForaCats').forEach(function (c) { cats[norm(c)] = c; });
-    return { cats: cats, textos: lerLista('ExtratoForaTexto').map(norm).filter(Boolean) };
+  /* ---------- para onde vai cada lançamento (regras escolhidas pela usuária + padrões da DH) ---------- */
+  // destinos: 'conta' = fica como está (receita/despesa) · 'RET' = Retirada Mariana · 'GRA' = Graciola (à parte) · 'FORA' = não conta
+  var DEST_NOME = { conta: 'Despesa do escritório', RET: 'Retirada da Mariana', GRA: 'Graciola (à parte)', FORA: 'Não conta' };
+  var DEST_NOME_E = { conta: 'Receita do escritório', GRA: 'Graciola (à parte)', FORA: 'Não conta' };
+  var DEST_CL = { RET: CL.RET, GRA: CL.GRA, FORA: CL.FORA };
+  function lerJSON(k, def) { try { var v = JSON.parse((CFG && CFG[k]) || 'null'); return v == null ? def : v; } catch (e) { return def; } }
+  function destCfg() {
+    var d = lerJSON('ExtratoDestinos', null);
+    if (!d) { // primeira vez: começa com o que já tinha sido marcado + TIER como retirada da Mariana
+      d = { cats: {}, textos: [{ t: 'TIER', d: 'RET' }] };
+      (lerJSON('ExtratoForaCats', []) || []).forEach(function (c) { d.cats[norm(c)] = 'FORA'; });
+      (lerJSON('ExtratoForaTexto', []) || []).forEach(function (t) { d.textos.push({ t: t, d: 'FORA' }); });
+    }
+    d.cats = d.cats || {}; d.textos = d.textos || [];
+    return d;
   }
   var FCFG = null;
-  function motivoFora(x) {
-    var c = x.Classe || CL.PEN; if (c !== CL.REC && c !== CL.DESP) return '';
-    var f = FCFG || foraCfg();
-    if (x.Categoria && f.cats[norm(x.Categoria)]) return 'categoria "' + x.Categoria + '"';
-    var t = norm((x.Descricao || '') + ' ' + (x.Categoria || '') + ' ' + (x.Obs || ''));
-    for (var i = 0; i < f.textos.length; i++) if (t.indexOf(f.textos[i]) >= 0) return 'contém "' + f.textos[i] + '"';
-    return '';
+  function foraCfg() { return destCfg(); }
+  function padraoDH(x) { // regras fixas que a Daphyni passou
+    var cat = norm(x.Categoria || ''), conta = norm(x.Conta || ''), v = num(x.Valor), txt = cat + ' ' + norm(x.Descricao || '');
+    if (/GRACIOLA/.test(txt)) return { d: 'GRA', m: 'Graciola' };
+    if (v < 0 && /SIMPLES|\bDAS\b/.test(cat) && /CEF|CAIXA|HEROLD/.test(conta)) return { d: 'GRA', m: 'DAS da Domingues & Herold = imposto da Graciola' };
+    if (v < 0 && /CART(AO|OES)/.test(cat)) return { d: 'RET', m: 'cartão de crédito da Mariana' };
+    return null;
   }
-  function classeEf(x) { return motivoFora(x) ? CL.FORA : (x.Classe || CL.PEN); }
-  function salvarLista(k, arr) {
-    var json = JSON.stringify(arr); CFG[k] = json; FCFG = null;
-    google.script.run.withFailureHandler(function (e) { alert('Não consegui salvar: ' + e.message); }).apiSetConfig(k, json);
+  function chaveCat(cat, conta) { return norm(cat || 'Outros') + (conta ? '@' + norm(conta) : ''); }
+  function destinoDe(x) {
+    var c = x.Classe || CL.PEN; if (c !== CL.REC && c !== CL.DESP) return null;
+    var f = FCFG || destCfg(), t = norm((x.Descricao || '') + ' ' + (x.Categoria || '') + ' ' + (x.Obs || ''));
+    for (var i = 0; i < f.textos.length; i++) { var w = norm(f.textos[i].t); if (w && t.indexOf(w) >= 0) return { d: f.textos[i].d, m: 'contém "' + f.textos[i].t + '"', regra: 'texto' }; }
+    var k1 = chaveCat(x.Categoria, x.Conta), k2 = chaveCat(x.Categoria);
+    if (f.cats[k1]) return { d: f.cats[k1], m: 'categoria "' + (x.Categoria || 'Outros') + '" em ' + x.Conta, regra: 'cat' };
+    if (f.cats[k2]) return { d: f.cats[k2], m: 'categoria "' + (x.Categoria || 'Outros') + '"', regra: 'cat' };
+    var p = padraoDH(x); if (p) return { d: p.d, m: p.m, regra: 'padrao' };
+    return null;
+  }
+  function classeEf(x) {
+    var d = destinoDe(x); if (!d || d.d === 'conta') return x.Classe || CL.PEN;
+    if (d.d === 'RET' && num(x.Valor) > 0) return CL.FORA;
+    return DEST_CL[d.d] || (x.Classe || CL.PEN);
+  }
+  function motivoFora(x) { var d = destinoDe(x); return d && d.d !== 'conta' ? d.m : ''; }
+  function salvarDest(d) {
+    var json = JSON.stringify(d); CFG.ExtratoDestinos = json; FCFG = null;
+    google.script.run.withFailureHandler(function (e) { alert('Não consegui salvar: ' + e.message); }).apiSetConfig('ExtratoDestinos', json);
     render(); if (typeof window.renderDash === 'function') window.renderDash();
+    if ($('exEscolher')) escolher(); else if (DET) detalhe();
   }
-  window.dhExForaCat = function (cat, fora) {
-    var l = lerLista('ExtratoForaCats').filter(function (c) { return norm(c) !== norm(cat); }); if (fora) l.push(cat);
-    salvarLista('ExtratoForaCats', l); if ($('exEscolher')) escolher(); else if (DET) detalhe();
+  window.dhExDestCat = function (cat, conta, dest) {
+    var d = destCfg(), k = chaveCat(cat, conta);
+    if (dest === '') delete d.cats[k]; else d.cats[k] = dest;
+    salvarDest(d);
   };
-  window.dhExForaTexto = function (txt, fora) {
-    txt = String(txt || '').trim(); if (!txt) return;
-    var l = lerLista('ExtratoForaTexto').filter(function (c) { return norm(c) !== norm(txt); }); if (fora) l.push(txt);
-    salvarLista('ExtratoForaTexto', l); if ($('exEscolher')) escolher(); else if (DET) detalhe();
+  window.dhExDestTexto = function (txt, dest) {
+    txt = String(txt || '').trim(); if (!txt) return; var d = destCfg();
+    d.textos = d.textos.filter(function (o) { return norm(o.t) !== norm(txt); });
+    if (dest) d.textos.push({ t: txt, d: dest });
+    salvarDest(d);
   };
+  // compatibilidade com botões antigos
+  window.dhExForaCat = function (cat, fora) { window.dhExDestCat(cat, '', fora ? 'FORA' : ''); };
+  window.dhExForaTexto = function (txt, fora) { window.dhExDestTexto(txt, fora ? 'FORA' : ''); };
+  function selDest(atual, padrao, entrada, onch) {
+    var nomes = entrada ? DEST_NOME_E : DEST_NOME;
+    return '<select class="ex-sel ex-dest ex-dest-' + (atual || padrao || 'conta') + '" onchange="' + onch + '">' +
+      '<option value=""' + (!atual ? ' selected' : '') + '>' + (padrao ? 'Padrão: ' + nomes[padrao] : nomes.conta) + '</option>' +
+      Object.keys(nomes).filter(function (k) { return k !== padrao || atual; }).map(function (k) { return '<option value="' + k + '"' + (atual === k ? ' selected' : '') + '>' + nomes[k] + '</option>'; }).join('') + '</select>';
+  }
   function escolher() {
-    FCFG = null; var f = foraCfg();
-    var tot = {}; (DATA.extrato || []).forEach(function (x) {
+    FCFG = null; var f = destCfg();
+    var grupos = {}; // tipo|cat -> {tot, contas:{conta:tot}, padrao}
+    (DATA.extrato || []).forEach(function (x) {
       var c = x.Classe; if (c !== CL.REC && c !== CL.DESP) return;
-      var k = (c === CL.REC ? 'E' : 'S') + '|' + (x.Categoria || 'Outros'); tot[k] = (tot[k] || 0) + Math.abs(num(x.Valor));
+      var tipo = c === CL.REC ? 'E' : 'S', cat = x.Categoria || 'Outros', k = tipo + '|' + cat, v = Math.abs(num(x.Valor));
+      var g = grupos[k] = grupos[k] || { tot: 0, contas: {}, pad: {} }; g.tot += v; g.contas[x.Conta || ''] = (g.contas[x.Conta || ''] || 0) + v;
+      var p = padraoDH(x); g.pad[x.Conta || ''] = p ? p.d : '';
     });
-    function grupo(tipo, titulo) {
-      var ks = Object.keys(tot).filter(function (k) { return k.charAt(0) === tipo; }).sort(function (a, b) { return tot[b] - tot[a]; });
+    function linhasGrupo(tipo, titulo) {
+      var ks = Object.keys(grupos).filter(function (k) { return k.charAt(0) === tipo; }).sort(function (a, b) { return grupos[b].tot - grupos[a].tot; });
       if (!ks.length) return '';
-      return '<div class="msec">' + titulo + '</div><div class="ex-esc-grid">' + ks.map(function (k) {
-        var cat = k.slice(2), on = !f.cats[norm(cat)];
-        return '<label class="ex-esc' + (on ? '' : ' off') + '"><input type="checkbox" ' + (on ? 'checked' : '') + ' onchange="dhExForaCat(' + esc(JSON.stringify(cat)) + ',!this.checked)"><span>' + esc(cat) + '</span><b>' + brl(tot[k]) + '</b></label>';
-      }).join('') + '</div>';
+      return '<div class="msec">' + titulo + '</div><table class="dh-tbl ex-dest-tbl"><tbody>' + ks.map(function (k) {
+        var cat = k.slice(2), g = grupos[k], contas = Object.keys(g.contas), catJ = esc(JSON.stringify(cat));
+        var padroes = contas.map(function (ct) { return g.pad[ct]; }), mesmoPad = padroes.every(function (p) { return p === padroes[0]; });
+        if (contas.length > 1 && !mesmoPad) { // mesma categoria com tratamento diferente por conta (ex.: DAS)
+          return contas.map(function (ct) {
+            return '<tr><td>' + esc(cat) + ' <span class="ex-ca-ct">' + esc(ct) + '</span></td><td class="r">' + brl(g.contas[ct]) + '</td><td>' +
+              selDest(f.cats[chaveCat(cat, ct)] || '', g.pad[ct], tipo === 'E', 'dhExDestCat(' + catJ + ',' + esc(JSON.stringify(ct)) + ',this.value)') + '</td></tr>';
+          }).join('');
+        }
+        return '<tr><td>' + esc(cat) + '</td><td class="r">' + brl(g.tot) + '</td><td>' + selDest(f.cats[chaveCat(cat)] || '', padroes[0], tipo === 'E', 'dhExDestCat(' + catJ + ',\'\',this.value)') + '</td></tr>';
+      }).join('') + '</tbody></table>';
     }
-    var textos = lerLista('ExtratoForaTexto');
-    var h = '<div class="mhead" id="exEscolher"><button class="mclose" onclick="dhExFecharEsc()">✕</button><h2>O que entra na conta</h2></div><div class="mbody">' +
-      '<div class="miuda" style="margin-bottom:12px">Desmarque o que <b>não</b> deve entrar nas entradas, saídas e no lucro real. Não apaga nada: dá para marcar de novo quando quiser. Vale para todos os meses.</div>' +
-      '<div class="msec">Nomes ou palavras que nunca entram</div>' +
-      '<div class="miuda" style="margin-bottom:8px">Ex.: <b>TIER</b>. Qualquer lançamento com essa palavra na descrição, no fornecedor/cliente ou na categoria fica fora da conta.</div>' +
-      '<div class="ex-esc-add"><input id="exEscTxt" placeholder="Digite um nome ou palavra (ex.: TIER)" onkeydown="if(event.key===\'Enter\'){dhExForaTexto(this.value,true)}"><button class="btn" onclick="dhExForaTexto(document.getElementById(\'exEscTxt\').value,true)">Adicionar</button></div>' +
-      (textos.length ? '<div class="ex-esc-tags">' + textos.map(function (t) { return '<span class="ex-esc-tag">' + esc(t) + ' <a href="#" onclick="event.preventDefault();dhExForaTexto(' + esc(JSON.stringify(t)) + ',false)">✕</a></span>'; }).join('') + '</div>' : '') +
-      grupo('E', 'Categorias de entrada') + grupo('S', 'Categorias de saída') +
-      (Object.keys(tot).length ? '' : '<div class="empty">Importe um extrato para ver as categorias.</div>') +
+    var h = '<div class="mhead" id="exEscolher"><button class="mclose" onclick="dhExFecharEsc()">✕</button><h2>Para onde vai cada lançamento</h2></div><div class="mbody">' +
+      '<div class="miuda" style="margin-bottom:12px"><b>Despesa do escritório</b> reduz o lucro. <b>Retirada da Mariana</b> não é despesa: é lucro que foi para ela (aparece em "Mariana tirou de fato"). <b>Graciola</b> fica no controle à parte. <b>Não conta</b> sai de tudo. Nada é apagado e vale para todos os meses.</div>' +
+      '<div class="msec">Nomes ou palavras</div>' +
+      '<div class="miuda" style="margin-bottom:8px">Vale para qualquer lançamento com a palavra na descrição, no fornecedor/cliente ou na categoria. Tem prioridade sobre a categoria.</div>' +
+      '<div class="ex-esc-add"><input id="exEscTxt" placeholder="Nome ou palavra (ex.: TIER)"><select id="exEscDest" class="ex-sel"><option value="RET">Retirada da Mariana</option><option value="GRA">Graciola (à parte)</option><option value="FORA">Não conta</option><option value="conta">Despesa/receita normal</option></select>' +
+      '<button class="btn" onclick="dhExDestTexto(document.getElementById(\'exEscTxt\').value,document.getElementById(\'exEscDest\').value)">Adicionar</button></div>' +
+      (f.textos.length ? '<div class="ex-esc-tags">' + f.textos.map(function (o) { return '<span class="ex-esc-tag ex-dest-' + o.d + '">' + esc(o.t) + ' → ' + esc(DEST_NOME[o.d] || o.d) + ' <a href="#" onclick="event.preventDefault();dhExDestTexto(' + esc(JSON.stringify(o.t)) + ',\'\')">✕</a></span>'; }).join('') + '</div>' : '') +
+      linhasGrupo('S', 'Categorias de saída') + linhasGrupo('E', 'Categorias de entrada') +
+      (Object.keys(grupos).length ? '' : '<div class="empty">Importe um extrato para ver as categorias.</div>') +
       '</div><div class="mfoot"><button class="btn" onclick="dhExFecharEsc()">Pronto</button></div>';
     el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
   }
@@ -525,7 +573,7 @@
       '<label class="fin-per"><span>Conta</span><select onchange="dhExSet(\'conta\',this.value)"><option value="">Todas as contas</option>' + Object.keys(contas).sort().map(function (c) { return '<option' + (c === ESTADO.conta ? ' selected' : '') + '>' + esc(c) + '</option>'; }).join('') + '</select></label></div></div>' +
       '<div class="ex-acoes"><button class="btn" onclick="document.getElementById(\'exArq\').click()">⬆ Importar extrato</button><input type="file" id="exArq" accept=".ofx,.OFX,.csv,.txt,.xlsx,.xls" style="display:none" onchange="dhExImportar(this)">' +
       '<button class="btn ghost dh-modelo" onclick="dhExModelo()">Modelo</button>' +
-      '<button class="btn ghost" onclick="dhExEscolher()">O que entra na conta</button>' +
+      '<button class="btn ghost" onclick="dhExEscolher()">Para onde vai cada lançamento</button>' +
       '<button class="btn ghost" onclick="dhExRegras()">Regras de classificação (' + regras().length + ')</button>' +
       '<button class="btn ghost" onclick="dhExAplicarRegras()">Aplicar regras nos "A classificar"</button>' +
       '<span class="miuda">Aceita o Excel do <b>Conta Azul</b> (Finanças › Extrato › Exportar) e o extrato do BB/Caixa em <b>OFX</b>, CSV ou Excel.</span></div>';
@@ -817,30 +865,39 @@
     var q = norm(DET.q);
     var lista = doPer.filter(entra).filter(function (x) { return !q || norm(x.Descricao + ' ' + x.Categoria + ' ' + x.Conta).indexOf(q) >= 0; })
       .sort(function (a, b) { return Math.abs(num(b.Valor)) - Math.abs(num(a.Valor)); });
-    var fora = doPer.filter(function (x) {
-      if (classeEf(x) !== CL.FORA) return false; var v = num(x.Valor);
+    var movidos = doPer.filter(function (x) {
+      var ce = classeEf(x), v = num(x.Valor);
+      var saiu = ce === CL.FORA || ((ce === CL.RET || ce === CL.GRA) && (x.Classe === CL.REC || x.Classe === CL.DESP || x.Classe === CL.FORA)) || (x.Classe === CL.RET || x.Classe === CL.GRA);
+      if (!saiu) return false;
       if (t === 'ent') return v > 0; if (t === 'sai') return v < 0 && (!DET.cat || (x.Categoria || 'Outros') === DET.cat); return true;
-    });
+    }).sort(function (a, b) { return Math.abs(num(b.Valor)) - Math.abs(num(a.Valor)); });
     var titulo = t === 'ent' ? 'Entradas consideradas' : (t === 'sai' ? (DET.cat ? 'Despesas · ' + DET.cat : 'Saídas consideradas') : 'O que entra no lucro real');
     var tot = lista.reduce(function (a, x) { return a + num(x.Valor); }, 0);
-    function linha(x, foraDaConta) {
-      var id = esc(String(x.ID)), v = num(x.Valor), mot = foraDaConta ? motivoFora(x) : '', catJ = esc(JSON.stringify(x.Categoria || 'Outros'));
-      return '<tr' + (foraDaConta ? ' class="ex-det-fora"' : '') + '><td class="ex-dt">' + fmtD(x.Data) + '</td><td class="ex-desc">' + esc(x.Descricao) + '<small>' + esc(x.Categoria || '—') + ' · ' + esc(x.Conta || '') + (mot ? ' · <b>fora por ' + esc(mot) + '</b>' : '') + '</small></td>' +
-        '<td class="r ex-v ' + (v < 0 ? 'neg' : 'pos') + '">' + brl(v) + '</td><td class="r fc-acoes">' +
-        (foraDaConta ? (mot ? '<button class="btn ghost fc-mini" onclick="dhExEscolher()">Ajustar</button>' : '<button class="btn ghost fc-mini" onclick="dhExRecolocar(\'' + id + '\')">Recolocar</button>')
-                     : '<button class="btn ghost fc-mini ex-tirar" onclick="dhExTirar(\'' + id + '\')">Tirar este</button> <button class="btn ghost fc-mini ex-tirar" title="Tirar todos os lançamentos desta categoria" onclick="dhExForaCat(' + catJ + ',true)">Tirar a categoria</button>') + '</td></tr>';
+    function linha(x, movido) {
+      var id = esc(String(x.ID)), v = num(x.Valor), d = destinoDe(x), ce = classeEf(x);
+      var onde = movido ? (ce === CL.RET ? 'Retirada da Mariana' : ce === CL.GRA ? 'Graciola (à parte)' : 'Não conta') : '';
+      var porque = movido ? (d && d.d !== 'conta' ? 'por ' + d.m : 'marcado neste lançamento') : '';
+      var acao;
+      if (!movido) acao = '<select class="ex-sel ex-mover" onchange="dhExMover(\'' + id + '\',this.value)"><option value="">Mover para…</option>' +
+          (v < 0 ? '<option value="i:RET">Este → Retirada da Mariana</option>' : '') + '<option value="i:GRA">Este → Graciola</option><option value="i:FORA">Este → Não conta</option>' +
+          '<optgroup label="Toda a categoria ' + esc(x.Categoria || 'Outros') + '">' + (v < 0 ? '<option value="c:RET">Categoria → Retirada da Mariana</option>' : '') + '<option value="c:GRA">Categoria → Graciola</option><option value="c:FORA">Categoria → Não conta</option></optgroup></select>';
+      else if (d && d.d !== 'conta') acao = '<button class="btn ghost fc-mini" onclick="dhExEscolher()">Ajustar regra</button>';
+      else acao = '<button class="btn ghost fc-mini" onclick="dhExRecolocar(\'' + id + '\')">Voltar para ' + (v < 0 ? 'despesa' : 'receita') + '</button>';
+      return '<tr' + (movido ? ' class="ex-det-fora"' : '') + '><td class="ex-dt">' + fmtD(x.Data) + '</td><td class="ex-desc">' + esc(x.Descricao) + '<small>' + esc(x.Categoria || '—') + ' · ' + esc(x.Conta || '') +
+        (movido ? ' · <b>' + esc(onde) + '</b> ' + esc(porque) : '') + '</small></td>' +
+        '<td class="r ex-v ' + (v < 0 ? 'neg' : 'pos') + '">' + brl(v) + '</td><td class="r fc-acoes">' + acao + '</td></tr>';
     }
     var h = '<div class="mhead"><button class="mclose" onclick="dhExFecharDet()">✕</button><h2>' + esc(titulo) + '</h2><div class="mtags"><span class="tag b">' + lista.length + ' lançamento(s)</span>' + (t === 'luc' ? '' : '<span class="tag">' + brl(tot) + '</span>') + '</div></div><div class="mbody">' +
       (t !== 'ent' ? '<div class="ex-box" style="margin:0 0 12px">' +
         (t === 'luc' ? '<div class="ex-box-l"><span>Entradas</span><b>' + brl(r.rec) + '</b></div><div class="ex-box-l"><span>(−) Despesas</span><b>' + brl(-r.desp) + '</b></div>' : '') +
         (t === 'luc' || (t === 'sai' && !DET.cat) ? '<div class="ex-box-l"><span>(−) Salário da Mariana · ' + brl(r.salario) + ' × ' + r.meses + ' mês(es) · <a href="#" onclick="event.preventDefault();dhExSalario()">alterar</a></span><b>' + brl(-r.pro) + '</b></div>' : '') +
         (t === 'luc' ? '<div class="ex-box-l tot"><span>= Lucro real</span><b>' + brl(r.lucro) + '</b></div>' : '') + '</div>' : '') +
-      '<div style="margin-bottom:10px"><button class="btn ghost fc-mini" onclick="dhExEscolher()">⚙ Escolher o que entra na conta (categorias e nomes, ex.: TIER)</button></div>' +
-      '<div class="miuda" style="margin-bottom:8px">"Tirar" não apaga o lançamento: ele vai para "Fora da conta" e pode ser recolocado quando quiser. Para mudar a classe (ex.: virar Retirada Mariana), use a aba Extrato bancário.</div>' +
+      '<div style="margin-bottom:10px"><button class="btn ghost fc-mini" onclick="dhExEscolher()">⚙ Para onde vai cada categoria e nome (ex.: TIER, cartões, DAS)</button></div>' +
+      '<div class="miuda" style="margin-bottom:8px">Use "Mover para…" em cada lançamento. Retirada da Mariana não é despesa: sai do custo e entra em "Mariana tirou de fato". Nada é apagado.</div>' +
       '<input type="search" class="ex-busca" style="width:100%;margin-bottom:8px" placeholder="Buscar..." value="' + esc(DET.q) + '" oninput="dhExDetBusca(this.value)">' +
       '<div class="scroll ex-det"><table class="dh-tbl ex-tbl"><tbody>' + lista.map(function (x) { return linha(x, false); }).join('') + '</tbody></table>' +
       (lista.length ? '' : '<div class="empty">Nada aqui.</div>') + '</div>' +
-      (fora.length ? '<div class="msec">Fora da conta (' + fora.length + ')</div><div class="scroll"><table class="dh-tbl ex-tbl"><tbody>' + fora.map(function (x) { return linha(x, true); }).join('') + '</tbody></table></div>' : '') +
+      (movidos.length ? '<div class="msec">' + (t === 'ent' ? 'Não entram nas entradas' : 'Não entram nas despesas') + ' (' + movidos.length + ' · ' + brl(movidos.reduce(function (a, x) { return a + num(x.Valor); }, 0)) + ')</div><div class="scroll ex-det"><table class="dh-tbl ex-tbl"><tbody>' + movidos.map(function (x) { return linha(x, true); }).join('') + '</tbody></table></div>' : '') +
       '</div><div class="mfoot"><button class="btn ghost" onclick="dhExFecharDet();goTo(\'extrato\')">Abrir Extrato bancário</button><button class="btn" onclick="dhExFecharDet()">Fechar</button></div>';
     el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
   }
@@ -848,6 +905,11 @@
   window.dhExDetBusca = function (v) { DET.q = v; clearTimeout(tDet); tDet = setTimeout(function () { detalhe(); var i = document.querySelector('.mbody .ex-busca'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }, 250); };
   function atualizarTelas() { detalhe(); if (typeof window.renderDash === 'function') window.renderDash(); }
   window.dhExTirar = function (id) { salvar([id], { Classe: CL.FORA }); atualizarTelas(); };
+  window.dhExMover = function (id, v) {
+    if (!v) return; var x = achar(id); if (!x) return; var dest = v.slice(2);
+    if (v.charAt(0) === 'i') { salvar([id], { Classe: DEST_CL[dest] }); atualizarTelas(); }
+    else window.dhExDestCat(x.Categoria || 'Outros', '', dest);
+  };
   window.dhExRecolocar = function (id) { var x = achar(id); if (!x) return; salvar([id], { Classe: num(x.Valor) > 0 ? CL.REC : CL.DESP }); atualizarTelas(); };
   window.dhExFecharDet = function () { DET = null; closeModal(); };
 
@@ -871,7 +933,7 @@
     if (typeof window.renderDash === 'function') window.renderDash();
   };
   function avisoDH() {
-    var n = pendentesDH().length; if (!n) return '';
+    return '';
     return '<div class="ex-pend ex-dh" onclick="dhExCorrigirDH()">⚠ <b>' + n + ' lançamento(s) da Graciola</b> (ou do cartão da Consultoria) estão contando no lucro. Foram importados antes das regras da DH. <u>Clique para corrigir</u>.</div>';
   }
   window.dhExAvisoDH = avisoDH;
