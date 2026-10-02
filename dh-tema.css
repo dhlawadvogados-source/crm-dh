@@ -407,3 +407,7 @@ html,body{background:linear-gradient(to right,var(--dh-marinho) 0,var(--dh-marin
   .ex-busca{min-width:0;width:100%;}
   .ex-filtros{width:100%;} .ex-filtros .fin-per{flex:1;min-width:0;}
 }
+.ex-ca-tbl td{font-size:12.5px;padding:6px 10px;}
+.ex-ca-tbl td.pos{color:#1f9254;} .ex-ca-tbl td.neg{color:#c33350;}
+.ex-ca-tbl .ex-sel{max-width:none;width:100%;min-width:180px;}
+.ex-novo{font-size:9.5px;text-transform:uppercase;letter-spacing:1px;background:#FFF4EE;color:#C2541E;border-radius:10px;padding:2px 7px;margin-left:4px;}

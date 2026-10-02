@@ -6,8 +6,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@400;600;700&family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=202610021324"></script>
-<script src="gas-shim.js?v=202610021324"></script>
+<script src="config.js?v=202610021557"></script>
+<script src="gas-shim.js?v=202610021557"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;}
@@ -123,7 +123,7 @@ input.rvenc:focus{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px 
 .msec{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:#F86C2E;font-weight:700;margin:20px 0 10px;border-bottom:1px solid #eee;padding-bottom:5px;}
 .mfoot{padding:16px 26px;background:#f7f8fa;display:flex;gap:10px;justify-content:flex-end;}
 </style>
-<link rel="stylesheet" href="dh-tema.css?v=202610021324">
+<link rel="stylesheet" href="dh-tema.css?v=202610021557">
 </head><body class="lg-open">
 <div class="lg-gate on" id="loginGate">
   <div class="lg-wrap">
@@ -1575,13 +1575,7 @@ function buildRentCanon(){
   });
   RENT_CANON=canon;
 }
-// Grupos econômicos: um contrato só, faturado em vários CNPJs (aparecem como uma linha só na Rentabilidade).
-var RENT_GRUPOS={
-  'Grupo RC':['gruporc','grupo rc','eletric minas','clinica medica ambulatorial almeida','mix convenios'],
-  'Grupo Jocar':['jocar reparacao','jocar santa felicidade','jocar trucks','grupo jocar']
-};
-function rentGrupoDe(n){var t=String(n==null?'':n).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/\s+/g,' ').trim();for(var g in RENT_GRUPOS){if(t===g.toLowerCase())return g;var ps=RENT_GRUPOS[g];for(var i=0;i<ps.length;i++){if(t.indexOf(ps[i])===0)return g;}}return '';}
-function rentCanon(n){n=String(n||'').trim();var g=rentGrupoDe(n);if(g)return g;return RENT_CANON[n]||n;}
+function rentCanon(n){n=String(n||'').trim();return RENT_CANON[n]||n;}
 function rtSetCat(c){RT_CAT=c;var box=el('rt_cats');if(box){var bs=box.getElementsByTagName('button');for(var i=0;i<bs.length;i++)bs[i].className='segbtn'+(bs[i].getAttribute('data-cat')===c?' on':'');}if(el('rt_clif'))el('rt_clif').value='';renderRent();}
 function rtSetHtipo(hp){RT_HTIPO=hp;var box=el('rt_htipos');if(box){var bs=box.getElementsByTagName('button');for(var i=0;i<bs.length;i++)bs[i].className='segbtn'+(bs[i].getAttribute('data-h')===hp?' on':'');}renderRent();}
 // Horas de uma linha conforme o filtro (processo, consultivo ou ambas).
@@ -1752,7 +1746,6 @@ function celToHoras_(v){
 function rentNorm(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
 // Pago do cliente no mês, direto do Contas a Receber (mensalidade + processo + consultivo), tolerante ao nome.
 function rentPagoMes(cli,mes){
-  if(RENT_GRUPOS[cli]){var tot=0;(DATA.receber||[]).forEach(function(r){var d=parseD(r.Vencimento);if(!d||ymd(d)!==mes)return;if(rentGrupoDe(r.Cliente)===cli)tot+=moneyN(r.Valor);});return tot;}
   var target=rentNorm(cli),alnum=target.replace(/[^a-z0-9]/g,'');
   var somaExato=0,achouExato=false,somaFuzzy=0;
   (DATA.receber||[]).forEach(function(r){
@@ -2145,8 +2138,8 @@ function renderRelAnual(a){
 }
 
 </script>
-<script src="painel.js?v=202610021324"></script>
-<script src="busca.js?v=202610021324"></script>
-<script src="modelos.js?v=202610021324"></script>
-<script src="extrato.js?v=202610021324"></script>
+<script src="painel.js?v=202610021557"></script>
+<script src="busca.js?v=202610021557"></script>
+<script src="modelos.js?v=202610021557"></script>
+<script src="extrato.js?v=202610021557"></script>
 </body></html>

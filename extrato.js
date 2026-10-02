@@ -188,7 +188,9 @@
         else if (ext === 'xlsx' || ext === 'xls') {
           if (typeof XLSX === 'undefined') throw new Error('A biblioteca de planilhas não carregou. Recarregue a página.');
           var wb = XLSX.read(buf, { type: 'array', cellDates: true });
-          res = lerTabela(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }));
+          var aoa = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' });
+          if (ehContaAzul(aoa)) { var ca = lerContaAzul(aoa); if (!ca.linhas.length) throw new Error('Não encontrei lançamentos realizados no arquivo do Conta Azul.'); PREV = { arquivo: nome, ca: true, linhas: ca.linhas, ignorados: ca.ignorados }; previaCA(); return; }
+          res = lerTabela(aoa);
         } else res = lerCSV(txt);
         if (!res.linhas.length) throw new Error('Não encontrei lançamentos no arquivo.');
         PREV = { arquivo: nome, linhas: res.linhas, contaSug: nomeConta(res.conta, nome) };
@@ -197,6 +199,126 @@
     };
     rd.readAsArrayBuffer(f);
   }
+  /* ---------- Conta Azul (Finanças › Extrato › Exportar) ---------- */
+  function cabecalhoCA(aoa) {
+    for (var i = 0; i < Math.min(aoa.length, 8); i++) {
+      var h = (aoa[i] || []).map(norm);
+      if (h.indexOf('DATA MOVIMENTO') >= 0 && h.some(function (x) { return /^CATEGORIA 1$/.test(x); })) return i;
+    }
+    return -1;
+  }
+  function ehContaAzul(aoa) { return cabecalhoCA(aoa) >= 0; }
+  function lerContaAzul(aoa) {
+    var hi = cabecalhoCA(aoa), head = aoa[hi].map(norm), out = [], ign = 0;
+    function col(n) { return head.indexOf(n); }
+    var iD = col('DATA MOVIMENTO'), iNome = col('NOME DO FORNECEDOR/CLIENTE'), iDesc = col('DESCRICAO'), iTipo = col('TIPO'),
+      iConta = col('CONTA BANCARIA'), iVal = col('VALOR (R$)'), iSit = col('SITUACAO'), iObs = col('OBSERVACOES');
+    var cats = [];
+    head.forEach(function (h, ix) { var m = h.match(/^CATEGORIA (\d+)$/); if (m) cats.push({ i: ix, v: col('VALOR NA CATEGORIA ' + m[1]) }); });
+    if (iD < 0 || iVal < 0) throw new Error('Arquivo do Conta Azul sem as colunas "Data movimento" e "Valor (R$)".');
+    for (var r = hi + 1; r < aoa.length; r++) {
+      var row = aoa[r] || [], data = lerData(row[iD]); if (!data) continue;
+      var valor = lerValor(row[iVal]); if (isNaN(valor) || !valor) continue;
+      var sit = norm(row[iSit]);
+      // só o que de fato passou no banco: "Atrasado", "Em aberto", "Agendado"... ficam de fora
+      if (sit && !/CONCILIAD|QUITAD|PAGO|RECEBID|LIQUIDAD|BAIXAD/.test(sit)) { ign++; continue; }
+      var nome = String(row[iNome] || '').trim(), desc = String(row[iDesc] || '').trim();
+      var texto = nome && desc && norm(desc).indexOf(norm(nome)) < 0 ? nome + ' · ' + desc : (nome || desc || '(sem descrição)');
+      var base = { Data: data, Descricao: texto, contaCA: String(row[iConta] || 'Conta Azul').trim(), tipo: norm(row[iTipo]), Obs: String(row[iObs] || '').trim() };
+      // rateio em várias categorias vira um lançamento por categoria
+      var partes = cats.map(function (c) { return { cat: String(row[c.i] || '').trim(), v: c.v >= 0 ? lerValor(row[c.v]) : NaN }; }).filter(function (p) { return p.cat; });
+      var soma = partes.reduce(function (a, p) { return a + (isNaN(p.v) ? 0 : p.v); }, 0);
+      if (partes.length > 1 && Math.abs(Math.abs(soma) - Math.abs(valor)) < 0.02) {
+        partes.forEach(function (p, k) { out.push(Object.assign({}, base, { Valor: Math.round((valor < 0 ? -1 : 1) * Math.abs(p.v) * 100) / 100, catCA: p.cat, parte: k + 1 })); });
+      } else out.push(Object.assign({}, base, { Valor: Math.round(valor * 100) / 100, catCA: partes[0] ? partes[0].cat : '(sem categoria)' }));
+    }
+    return { linhas: out, ignorados: ign };
+  }
+  function mapaCA() { try { return JSON.parse((CFG && CFG.ContaAzulMapa) || '{}') || {}; } catch (e) { return {}; } }
+  function classeSugeridaCA(cat, valor) {
+    var c = norm(cat);
+    if (/APLICA|RESGATE|INVESTIMENTO/.test(c)) return CL.APL;
+    if (/REPASSE|TRANSFER/.test(c)) return CL.TRF;
+    if (/DISTRIBUI|LUCRO|RETIRADA/.test(c)) return CL.RET;
+    if (/PRO.?LABORE|SALARIOS? (DOS )?SOCIO/.test(c)) return CL.PRO;
+    if (/APORTE/.test(c)) return CL.APO;
+    if (/EMPRESTIMO/.test(c)) return CL.OUT;
+    return valor > 0 ? CL.REC : CL.DESP;
+  }
+  function contaPadraoCA(n) { var c = norm(n); return c === 'CEF' || /CAIXA/.test(c) ? 'Caixa' : n; }
+  function previaCA() {
+    var m = mapaCA(); m.cats = m.cats || {}; m.contas = m.contas || {};
+    var cats = {}, contas = {};
+    PREV.linhas.forEach(function (l) {
+      var k = l.catCA; var o = cats[k] = cats[k] || { n: 0, v: 0 }; o.n++; o.v += l.Valor;
+      contas[l.contaCA] = (contas[l.contaCA] || 0) + 1;
+    });
+    PREV.mapa = { cats: {}, contas: {} };
+    Object.keys(cats).forEach(function (k) { PREV.mapa.cats[k] = m.cats[k] || classeSugeridaCA(k, cats[k].v); });
+    Object.keys(contas).forEach(function (k) { PREV.mapa.contas[k] = m.contas[k] || contaPadraoCA(k); });
+    PREV.catsInfo = cats;
+    var datas = PREV.linhas.map(function (l) { return l.Data; }).sort();
+    var ordem = Object.keys(cats).sort(function (a, b) { return (cats[a].v > 0) - (cats[b].v > 0) || Math.abs(cats[b].v) - Math.abs(cats[a].v); });
+    var h = '<div class="mhead"><button class="mclose" onclick="closeModal()">✕</button><h2>Importar do Conta Azul</h2><div class="mtags"><span class="tag b">' + esc(PREV.arquivo) + '</span><span class="tag">' + fmtD(datas[0]) + ' a ' + fmtD(datas[datas.length - 1]) + '</span></div></div><div class="mbody">' +
+      '<div class="miuda" style="margin-bottom:10px">' + PREV.linhas.length + ' lançamento(s) realizados' + (PREV.ignorados ? ' · ' + PREV.ignorados + ' ignorado(s) por não estarem conciliados (ex.: "Atrasado")' : '') +
+      '. A categoria do Conta Azul é mantida; escolha abaixo em que <b>classe</b> do lucro real cada uma entra. Fica salvo para os próximos meses.</div>' +
+      '<div class="msec">Contas</div><div class="form fc-form">' + Object.keys(contas).map(function (k, i) {
+        return '<div><label>' + esc(k) + ' (' + contas[k] + ') no CRM se chama</label><input class="ex-ca-conta" data-k="' + esc(k) + '" list="exContasDL3" value="' + esc(PREV.mapa.contas[k]) + '" onchange="dhExCaAtualiza()"></div>';
+      }).join('') + '<datalist id="exContasDL3">' + contasConhecidas().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></div>' +
+      '<div class="msec">Categorias do Conta Azul → classe no CRM</div>' +
+      '<div class="scroll"><table class="dh-tbl ex-ca-tbl"><thead><tr><th>Categoria no Conta Azul</th><th class="r">Lanç.</th><th class="r">Total</th><th>Classe no CRM</th></tr></thead><tbody>' +
+      ordem.map(function (k) {
+        var c = cats[k], cl = PREV.mapa.cats[k];
+        return '<tr><td>' + esc(k) + (m.cats[k] ? '' : ' <span class="ex-novo">nova</span>') + '</td><td class="r">' + c.n + '</td><td class="r ' + (c.v < 0 ? 'neg' : 'pos') + '">' + brl(c.v) + '</td><td>' +
+          selClasse('', cl, 'data-k="' + esc(k) + '" onchange="this.className=\'ex-sel ex-ca-cl ex-c-\'+dhExCss(this.value);dhExCaAtualiza()"').replace('class="ex-sel', 'class="ex-sel ex-ca-cl') + '</td></tr>';
+      }).join('') + '</tbody></table></div><div id="exCaResumo"></div></div>' +
+      '<div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" id="exBtnImp" onclick="dhExConfirmarCA()">Importar</button></div>';
+    el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
+    dhExCaAtualiza();
+  }
+  window.dhExCss = classeCss;
+  function linhasCA() {
+    var seq = {};
+    return PREV.linhas.map(function (l) {
+      var base = l.Data + '|' + l.Valor + '|' + norm(l.Descricao).slice(0, 60) + (l.parte ? '|p' + l.parte : '');
+      var k0 = norm(l.contaCA) + ':' + base; seq[k0] = (seq[k0] || 0) + 1;
+      var classe = PREV.mapa.cats[l.catCA] || CL.PEN;
+      return { Data: l.Data, Descricao: l.Descricao, Valor: l.Valor, Conta: PREV.mapa.contas[l.contaCA] || l.contaCA, Classe: classe,
+        Categoria: l.catCA, Chave: 'CA:' + k0 + (seq[k0] > 1 ? '|' + seq[k0] : ''), Obs: l.Obs || '' };
+    });
+  }
+  window.dhExCaAtualiza = function () {
+    [].forEach.call(document.querySelectorAll('.ex-ca-cl'), function (s) { PREV.mapa.cats[s.getAttribute('data-k')] = s.value; });
+    [].forEach.call(document.querySelectorAll('.ex-ca-conta'), function (i) { PREV.mapa.contas[i.getAttribute('data-k')] = i.value.trim() || i.getAttribute('data-k'); });
+    var linhas = linhasCA(), ja = {}; (DATA.extrato || []).forEach(function (x) { ja[String(x.Chave)] = 1; });
+    var novos = linhas.filter(function (l) { return !ja[l.Chave]; }); PREV.novos = novos;
+    var r = resumo(novos);
+    var b = $('exBtnImp'); if (b) { b.style.display = novos.length ? '' : 'none'; b.textContent = 'Importar ' + novos.length + ' lançamento(s)'; }
+    $('exCaResumo').innerHTML = '<div class="ex-prev-n"><div><span>Novos</span><b>' + novos.length + '</b></div><div><span>Já importados</span><b>' + (linhas.length - novos.length) + '</b></div>' +
+      '<div><span>Receitas</span><b class="pos">' + brl(r.rec) + '</b></div><div><span>Despesas</span><b class="warn">' + brl(-r.desp) + '</b></div><div><span>Lucro real</span><b>' + brl(r.lucro) + '</b></div></div>' +
+      avisoSobreposicao(novos);
+  };
+  window.dhExConfirmarCA = function () {
+    dhExCaAtualiza();
+    var mapa = mapaCA(); mapa.cats = Object.assign(mapa.cats || {}, PREV.mapa.cats); mapa.contas = Object.assign(mapa.contas || {}, PREV.mapa.contas);
+    var json = JSON.stringify(mapa); if (CFG) CFG.ContaAzulMapa = json;
+    google.script.run.withFailureHandler(function () {}).apiSetConfig('ContaAzulMapa', json);
+    dhExConfirmar();
+  };
+  // avisa se o mesmo mês/conta já veio de outra fonte (banco x Conta Azul) — evita contar em dobro
+  function avisoSobreposicao(novos) {
+    var fonte = function (ch) { return /^CA:/.test(String(ch)) ? 'Conta Azul' : 'extrato do banco'; };
+    var existentes = {};
+    (DATA.extrato || []).forEach(function (x) { existentes[norm(x.Conta) + '|' + ymOf(x.Data) + '|' + fonte(x.Chave)] = 1; });
+    var conflito = {};
+    novos.forEach(function (l) {
+      var f = fonte(l.Chave), outra = f === 'Conta Azul' ? 'extrato do banco' : 'Conta Azul', ym = ymOf(l.Data);
+      if (existentes[norm(l.Conta) + '|' + ym + '|' + outra]) conflito[l.Conta + ' · ' + MES_C[+ym.slice(5) - 1] + '/' + ym.slice(2, 4) + ' (já veio do ' + outra + ')'] = 1;
+    });
+    var k = Object.keys(conflito);
+    return k.length ? '<div class="ex-pend" style="cursor:default">⚠ <b>Atenção, pode duplicar:</b> ' + esc(k.join('; ')) + '. Importe cada mês de uma fonte só.</div>' : '';
+  }
+
   function montarLinhas(conta) {
     var seq = {};
     return PREV.linhas.map(function (l) {
@@ -228,7 +350,7 @@
       '<div class="ex-prev-n"><div><span>Lançamentos no arquivo</span><b>' + linhas.length + '</b></div><div><span>Novos</span><b>' + novos.length + '</b></div><div><span>Já importados</span><b>' + (linhas.length - novos.length) + '</b></div>' +
       '<div><span>Entradas novas</span><b class="pos">' + brl(ent) + '</b></div><div><span>Saídas novas</span><b class="warn">' + brl(sai) + '</b></div></div>' +
       (novos.length ? '<div class="miuda" style="margin-top:10px">Classificação automática: ' + Object.keys(porClasse).map(function (k) { return esc(k) + ' (' + porClasse[k] + ')'; }).join(' · ') +
-        (pen ? '. <b>' + pen + ' ficam "A classificar"</b> para você ajustar depois.' : '.') + '</div>' : '<div class="miuda" style="margin-top:10px">Tudo deste arquivo já tinha sido importado.</div>') +
+        (pen ? '. <b>' + pen + ' ficam "A classificar"</b> para você ajustar depois.' : '.') + '</div>' + avisoSobreposicao(novos) : '<div class="miuda" style="margin-top:10px">Tudo deste arquivo já tinha sido importado.</div>') +
       '</div><div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button>' +
       (novos.length ? '<button class="btn" id="exBtnImp" onclick="dhExConfirmar()">Importar ' + novos.length + ' lançamento(s)</button>' : '') + '</div>';
     el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
@@ -317,7 +439,7 @@
       '<button class="btn ghost dh-modelo" onclick="dhExModelo()">Modelo</button>' +
       '<button class="btn ghost" onclick="dhExRegras()">Regras de classificação (' + regras().length + ')</button>' +
       '<button class="btn ghost" onclick="dhExAplicarRegras()">Aplicar regras nos "A classificar"</button>' +
-      '<span class="miuda">Banco do Brasil e Caixa: exporte o extrato em <b>OFX</b> (melhor) ou CSV/Excel.</span></div>';
+      '<span class="miuda">Aceita o Excel do <b>Conta Azul</b> (Finanças › Extrato › Exportar) e o extrato do BB/Caixa em <b>OFX</b>, CSV ou Excel.</span></div>';
 
     if (!todos.length) {
       h += '<div class="card dh-card fc-card ex-vazio">' + lbl('Comece importando um extrato') +
@@ -365,11 +487,11 @@
     // lista de lançamentos
     var cont = {}; doPer.forEach(function (x) { var c = x.Classe || CL.PEN; cont[c] = (cont[c] || 0) + 1; });
     var q = norm(ESTADO.busca);
-    var lista = doPer.filter(function (x) { return (!ESTADO.classe || (x.Classe || CL.PEN) === ESTADO.classe) && (!q || norm(x.Descricao).indexOf(q) >= 0 || norm(x.Obs).indexOf(q) >= 0); })
+    var lista = doPer.filter(function (x) { return (!ESTADO.classe || (x.Classe || CL.PEN) === ESTADO.classe) && (!q || norm(x.Descricao).indexOf(q) >= 0 || norm(x.Obs).indexOf(q) >= 0 || norm(x.Categoria).indexOf(q) >= 0); })
       .sort(function (a, b) { return String(b.Data).localeCompare(String(a.Data)) || (num(a.Valor) - num(b.Valor)); });
     var nSel = Object.keys(ESTADO.sel).length;
     h += '<div class="card dh-card fc-card" id="exLista"><div class="dh-head">' + lbl('Lançamentos (' + lista.length + ')') +
-      '<input type="search" class="ex-busca" placeholder="Buscar na descrição..." value="' + esc(ESTADO.busca) + '" oninput="dhExBusca(this.value)"></div>' +
+      '<input type="search" class="ex-busca" placeholder="Buscar na descrição ou categoria..." value="' + esc(ESTADO.busca) + '" oninput="dhExBusca(this.value)"></div>' +
       '<div class="lc-f ex-chips"><button class="segbtn' + (!ESTADO.classe ? ' on' : '') + '" onclick="dhExSet(\'classe\',\'\')">Todas (' + doPer.length + ')</button>' +
       CLASSES.filter(function (c) { return cont[c]; }).map(function (c) { return '<button class="segbtn ex-chip-' + classeCss(c) + (ESTADO.classe === c ? ' on' : '') + '" onclick="dhExSet(\'classe\',\'' + c + '\')">' + c + ' (' + cont[c] + ')</button>'; }).join('') + '</div>' +
       (nSel ? '<div class="ex-lote"><b>' + nSel + ' selecionado(s)</b> · classificar como ' + selClasse('', CL.DESP, 'id="exLoteC" onchange="dhExLoteCat()"') + ' <span id="exLoteCatBox">' + selCat('', CL.DESP, 'id="exLoteCat"') + '</span>' +
@@ -412,7 +534,7 @@
   window.dhExSel = function (id, on) { if (on) ESTADO.sel[id] = 1; else delete ESTADO.sel[id]; render(); };
   window.dhExSelTodos = function (on) {
     ESTADO.sel = {};
-    if (on) { var p = perAtual(), q = norm(ESTADO.busca); (DATA.extrato || []).forEach(function (x) { if (noPer(x, p) && (!ESTADO.conta || x.Conta === ESTADO.conta) && (!ESTADO.classe || (x.Classe || CL.PEN) === ESTADO.classe) && (!q || norm(x.Descricao).indexOf(q) >= 0)) ESTADO.sel[x.ID] = 1; }); }
+    if (on) { var p = perAtual(), q = norm(ESTADO.busca); (DATA.extrato || []).forEach(function (x) { if (noPer(x, p) && (!ESTADO.conta || x.Conta === ESTADO.conta) && (!ESTADO.classe || (x.Classe || CL.PEN) === ESTADO.classe) && (!q || norm(x.Descricao).indexOf(q) >= 0 || norm(x.Obs).indexOf(q) >= 0 || norm(x.Categoria).indexOf(q) >= 0)) ESTADO.sel[x.ID] = 1; }); }
     render();
   };
   window.dhExLoteCat = function () { var c = $('exLoteC').value; $('exLoteCatBox').innerHTML = selCat('', c, 'id="exLoteCat"'); };
