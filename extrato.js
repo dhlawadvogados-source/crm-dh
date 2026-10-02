@@ -21,9 +21,9 @@
   var CL = {
     REC: 'Receita', DESP: 'Despesa', PRO: 'Pró-labore Mariana', RET: 'Retirada Mariana', APO: 'Aporte Mariana',
     APL: 'Aplicação ou resgate', TRF: 'Transferência entre contas', OUT: 'Outros (fora do lucro)', PEN: 'A classificar',
-    GRA: 'Graciola (à parte)'
+    GRA: 'Graciola (à parte)', FORA: 'Fora da conta'
   };
-  var CLASSES = [CL.REC, CL.DESP, CL.PRO, CL.RET, CL.GRA, CL.APO, CL.APL, CL.TRF, CL.OUT, CL.PEN];
+  var CLASSES = [CL.REC, CL.DESP, CL.PRO, CL.RET, CL.GRA, CL.APO, CL.APL, CL.TRF, CL.OUT, CL.FORA, CL.PEN];
   var CLASSE_INFO = {};
   CLASSE_INFO[CL.REC] = 'Entrada do escritório (honorários etc.). Entra no lucro.';
   CLASSE_INFO[CL.DESP] = 'Gasto do escritório. Reduz o lucro.';
@@ -34,6 +34,7 @@
   CLASSE_INFO[CL.TRF] = 'Transferência entre as contas da DH e da Consultoria. Fica fora do lucro.';
   CLASSE_INFO[CL.OUT] = 'Movimento que não é receita nem despesa (empréstimo, estorno...).';
   CLASSE_INFO[CL.PEN] = 'Ainda não foi classificado.';
+  CLASSE_INFO[CL.FORA] = 'Tirado da conta por você (não entra em entradas, saídas nem lucro). Dá para recolocar.';
   CLASSE_INFO[CL.GRA] = 'Notas da Graciola e o DAS pago sobre elas. Controle à parte: não entra no lucro real.';
   var CAT_DESP = ['Salário', 'Comissão', 'Benefícios', 'Estrutura', 'Aluguel e condomínio', 'Tributos', 'Serviços', 'Marketing', 'Reembolso', 'Tarifas bancárias', 'Cartão de crédito', 'Outros'];
   var CAT_REC = ['Honorários', 'Reembolso de custas', 'Rendimentos', 'Outros'];
@@ -421,6 +422,7 @@
       else if (c === CL.APL) r.apl += v;
       else if (c === CL.TRF) r.trf += v;
       else if (c === CL.OUT) r.out += v;
+      else if (c === CL.FORA) { r.fora = (r.fora || 0) + v; r.foraN = (r.foraN || 0) + 1; }
       else { r.pen += v; r.penN++; }
     });
     r.meses = Object.keys(meses).filter(Boolean).length;
@@ -736,5 +738,54 @@
   document.addEventListener('DOMContentLoaded', function () {
     var app = $('app'); if (app && !$('v-extrato')) { var s = document.createElement('section'); s.className = 'view'; s.id = 'v-extrato'; var ref = $('v-financeiro') || $('v-painel'); app.insertBefore(s, ref ? ref.nextSibling : null); }
   });
+  /* ---------- detalhe: o que está entrando na conta (abre a partir de Dados financeiros) ---------- */
+  var DET = null;
+  function noFiltro(x) { var f = window.__dhFiltroPer; return f ? f(ymOf(x.Data)) : true; }
+  window.dhExDetalhe = function (tipo, cat) { DET = { tipo: tipo, cat: cat || '', q: '' }; detalhe(); };
+  function detalhe() {
+    if (!DET) return;
+    var t = DET.tipo, doPer = (DATA.extrato || []).filter(noFiltro), r = resumo(doPer);
+    function entra(x) {
+      var c = x.Classe || CL.PEN;
+      if (t === 'ent') return c === CL.REC;
+      if (t === 'sai') return c === CL.DESP && (!DET.cat || (x.Categoria || 'Outros') === DET.cat);
+      return c === CL.REC || c === CL.DESP;
+    }
+    var q = norm(DET.q);
+    var lista = doPer.filter(entra).filter(function (x) { return !q || norm(x.Descricao + ' ' + x.Categoria + ' ' + x.Conta).indexOf(q) >= 0; })
+      .sort(function (a, b) { return Math.abs(num(b.Valor)) - Math.abs(num(a.Valor)); });
+    var fora = doPer.filter(function (x) {
+      if (x.Classe !== CL.FORA) return false; var v = num(x.Valor);
+      if (t === 'ent') return v > 0; if (t === 'sai') return v < 0 && (!DET.cat || (x.Categoria || 'Outros') === DET.cat); return true;
+    });
+    var titulo = t === 'ent' ? 'Entradas consideradas' : (t === 'sai' ? (DET.cat ? 'Despesas · ' + DET.cat : 'Saídas consideradas') : 'O que entra no lucro real');
+    var tot = lista.reduce(function (a, x) { return a + num(x.Valor); }, 0);
+    function linha(x, foraDaConta) {
+      var id = esc(String(x.ID)), v = num(x.Valor);
+      return '<tr' + (foraDaConta ? ' class="ex-det-fora"' : '') + '><td class="ex-dt">' + fmtD(x.Data) + '</td><td class="ex-desc">' + esc(x.Descricao) + '<small>' + esc(x.Categoria || '—') + ' · ' + esc(x.Conta || '') + '</small></td>' +
+        '<td class="r ex-v ' + (v < 0 ? 'neg' : 'pos') + '">' + brl(v) + '</td><td class="r">' +
+        (foraDaConta ? '<button class="btn ghost fc-mini" onclick="dhExRecolocar(\'' + id + '\')">Recolocar</button>'
+                     : '<button class="btn ghost fc-mini ex-tirar" onclick="dhExTirar(\'' + id + '\')">Tirar da conta</button>') + '</td></tr>';
+    }
+    var h = '<div class="mhead"><button class="mclose" onclick="dhExFecharDet()">✕</button><h2>' + esc(titulo) + '</h2><div class="mtags"><span class="tag b">' + lista.length + ' lançamento(s)</span>' + (t === 'luc' ? '' : '<span class="tag">' + brl(tot) + '</span>') + '</div></div><div class="mbody">' +
+      (t !== 'ent' ? '<div class="ex-box" style="margin:0 0 12px">' +
+        (t === 'luc' ? '<div class="ex-box-l"><span>Entradas</span><b>' + brl(r.rec) + '</b></div><div class="ex-box-l"><span>(−) Despesas</span><b>' + brl(-r.desp) + '</b></div>' : '') +
+        (t === 'luc' || (t === 'sai' && !DET.cat) ? '<div class="ex-box-l"><span>(−) Salário da Mariana · ' + brl(r.salario) + ' × ' + r.meses + ' mês(es) · <a href="#" onclick="event.preventDefault();dhExSalario()">alterar</a></span><b>' + brl(-r.pro) + '</b></div>' : '') +
+        (t === 'luc' ? '<div class="ex-box-l tot"><span>= Lucro real</span><b>' + brl(r.lucro) + '</b></div>' : '') + '</div>' : '') +
+      '<div class="miuda" style="margin-bottom:8px">"Tirar da conta" não apaga o lançamento: ele vai para "Fora da conta" e pode ser recolocado quando quiser. Para mudar a classe (ex.: virar Retirada Mariana), use a aba Extrato bancário.</div>' +
+      '<input type="search" class="ex-busca" style="width:100%;margin-bottom:8px" placeholder="Buscar..." value="' + esc(DET.q) + '" oninput="dhExDetBusca(this.value)">' +
+      '<div class="scroll ex-det"><table class="dh-tbl ex-tbl"><tbody>' + lista.map(function (x) { return linha(x, false); }).join('') + '</tbody></table>' +
+      (lista.length ? '' : '<div class="empty">Nada aqui.</div>') + '</div>' +
+      (fora.length ? '<div class="msec">Fora da conta (' + fora.length + ')</div><div class="scroll"><table class="dh-tbl ex-tbl"><tbody>' + fora.map(function (x) { return linha(x, true); }).join('') + '</tbody></table></div>' : '') +
+      '</div><div class="mfoot"><button class="btn ghost" onclick="dhExFecharDet();goTo(\'extrato\')">Abrir Extrato bancário</button><button class="btn" onclick="dhExFecharDet()">Fechar</button></div>';
+    el('modalCard').innerHTML = h; el('modalBg').classList.add('on');
+  }
+  var tDet = null;
+  window.dhExDetBusca = function (v) { DET.q = v; clearTimeout(tDet); tDet = setTimeout(function () { detalhe(); var i = document.querySelector('.mbody .ex-busca'); if (i) { i.focus(); i.setSelectionRange(v.length, v.length); } }, 250); };
+  function atualizarTelas() { detalhe(); if (typeof window.renderDash === 'function') window.renderDash(); }
+  window.dhExTirar = function (id) { salvar([id], { Classe: CL.FORA }); atualizarTelas(); };
+  window.dhExRecolocar = function (id) { var x = achar(id); if (!x) return; salvar([id], { Classe: num(x.Valor) > 0 ? CL.REC : CL.DESP }); atualizarTelas(); };
+  window.dhExFecharDet = function () { DET = null; closeModal(); };
+
   window.dhExRender = render;
 })();
