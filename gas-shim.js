@@ -509,6 +509,19 @@
       return fetch(url, { method: opts.method || 'GET', headers: headers, body: opts.body });
     }).then(function (r) {
       if (r.status === 401 && !retried) { Auth.invalidate(); return api(url, opts, true); }
+      if (r.status === 403 && !retried) {
+        return r.clone().text().then(function (t) {
+          if (/insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT/i.test(t)) {
+            Auth.invalidate(true);
+            UI.loginError('Faltou liberar o acesso às planilhas. Clique em "Entrar com Google" e, na tela de permissões, MARQUE a caixa das planilhas.');
+            return api(url, opts, true);
+          }
+          return handle(r);
+        });
+      }
+      return handle(r);
+    });
+    function handle(r) {
       return r.text().then(function (t) {
         var j = null; try { j = t ? JSON.parse(t) : {}; } catch (e) {}
         if (!r.ok) {
@@ -518,7 +531,7 @@
         }
         return j;
       });
-    });
+    }
   }
 
   function reload() {
@@ -531,7 +544,7 @@
    * ========================================================= */
   var TOKEN_KEY = 'crm_dh_token_v1';
   var Auth = (function () {
-    var tok = null, exp = 0, waiters = [], client = null;
+    var tok = null, exp = 0, waiters = [], client = null, needConsent = false;
     try { var s = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null'); if (s && s.exp > Date.now() + 60000) { tok = s.tok; exp = s.exp; } } catch (e) {}
     function valid() { return tok && exp > Date.now() + 60000; }
     function ensureClient() {
@@ -542,6 +555,15 @@
         scope: SCOPES,
         callback: function (resp) {
           if (resp.error) { UI.loginError('O Google recusou o login: ' + resp.error); return; }
+          // o Google deixa a pessoa desmarcar a permissão da planilha; sem ela o CRM não funciona
+          try {
+            if (google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(resp, 'https://www.googleapis.com/auth/spreadsheets')) {
+              needConsent = true;
+              UI.loginError('Faltou liberar o acesso às planilhas. Clique em "Entrar com Google" de novo e, na tela de permissões, MARQUE a caixa "Ver, editar, criar e excluir todas as suas planilhas".');
+              return;
+            }
+          } catch (e) {}
+          needConsent = false;
           tok = resp.access_token; exp = Date.now() + (Number(resp.expires_in) || 3600) * 1000;
           try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ tok: tok, exp: exp })); } catch (e) {}
           var w = waiters; waiters = []; w.forEach(function (f) { f(tok); });
@@ -560,10 +582,10 @@
       signIn: function () {
         try {
           var hint = ''; try { hint = localStorage.getItem('crm_dh_email') || ''; } catch (e) {}
-          ensureClient().requestAccessToken({ prompt: tok ? '' : 'select_account', login_hint: hint || undefined });
+          ensureClient().requestAccessToken({ prompt: needConsent ? 'consent' : (tok ? '' : 'select_account'), login_hint: hint || undefined });
         } catch (e) { UI.loginError(e.message); }
       },
-      invalidate: function () { tok = null; exp = 0; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} },
+      invalidate: function (consent) { tok = null; exp = 0; if (consent) needConsent = true; try { localStorage.removeItem(TOKEN_KEY); } catch (e) {} },
       signOut: function () {
         var t = tok; Auth.invalidate();
         try { localStorage.removeItem('crm_dh_email'); } catch (e) {}
