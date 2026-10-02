@@ -344,11 +344,12 @@
       rS.innerHTML =
         '<div class="card dh-card" onclick="goTo(\'extrato\')">' + lbl('Saídas · despesas · ' + perNome()) +
           '<div class="dh-row"><span class="dh-ico out">' + ic('out', 24) + '</span><div><div class="dh-money">' + brl0(ex.desp) + '</div><div class="dh-sub">despesas pagas (extrato bancário)</div></div></div>' +
-          '<div class="dh-split"><div><span>Pró-labore Mariana</span><b>' + brl0(ex.pro) + '</b></div><div><span>Retiradas Mariana</span><b>' + brl0(ex.ret) + '</b></div></div>' +
+          '<div class="dh-split"><div><span>Salário Mariana</span><b>' + brl0(ex.pro) + '</b></div><div><span>Mariana tirou de fato</span><b>' + brl0(ex.marTot) + '</b></div></div>' +
           (ex.penN ? '<div class="dh-sub dh-aviso">⚠ ' + ex.penN + ' lançamento(s) do extrato a classificar</div>' : '') + '</div>' +
         '<div class="card dh-card" onclick="goTo(\'extrato\')">' + lbl('Lucro real · ' + perNome()) +
-          '<div class="dh-row"><span class="dh-ico ' + (ex.lucro < 0 ? 'warn' : 'ok') + '">' + ic('bars', 24) + '</span><div><div class="dh-money ' + (ex.lucro < 0 ? 'warn' : 'pos') + '">' + brl0(ex.lucro) + '</div><div class="dh-sub">receitas − despesas − pró-labore</div></div></div>' +
-          '<div class="dh-split"><div><span>Receitas no extrato</span><b>' + brl0(ex.rec) + '</b></div><div><span>Ficou na empresa</span><b>' + brl0(ex.ficou) + '</b></div></div></div>' +
+          '<div class="dh-row"><span class="dh-ico ' + (ex.lucro < 0 ? 'warn' : 'ok') + '">' + ic('bars', 24) + '</span><div><div class="dh-money ' + (ex.lucro < 0 ? 'warn' : 'pos') + '">' + brl0(ex.lucro) + '</div><div class="dh-sub">receitas − despesas − salário da Mariana</div></div></div>' +
+          '<div class="dh-split"><div><span>Receitas (sem Graciola)</span><b>' + brl0(ex.rec) + '</b></div><div><span>Ficou na empresa</span><b>' + brl0(ex.ficou) + '</b></div></div>' +
+          (ex.graRec || ex.graDesp ? '<div class="dh-sub dh-fora">Graciola à parte: ' + brl0(ex.graRec) + ' recebidos − ' + brl0(ex.graDesp) + ' de DAS = ' + brl0(ex.gra) + '</div>' : '') + '</div>' +
         '<div class="card dh-card" onclick="goTo(\'extrato\')">' + lbl('Despesas por categoria · ' + perNome()) +
           (exCats.length ? '<div class="dh-cats">' + exCats.slice(0, 6).map(function (c) {
             return '<div class="dh-cat"><span>' + esc(c) + '</span><div class="dh-bar"><span class="b3" style="width:' + (ex.catD[c] / exMax * 100).toFixed(1) + '%"></span></div><b>' + brl0(ex.catD[c]) + '</b></div>';

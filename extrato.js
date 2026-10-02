@@ -20,9 +20,10 @@
   /* ---------- classes ---------- */
   var CL = {
     REC: 'Receita', DESP: 'Despesa', PRO: 'Pró-labore Mariana', RET: 'Retirada Mariana', APO: 'Aporte Mariana',
-    APL: 'Aplicação ou resgate', TRF: 'Transferência entre contas', OUT: 'Outros (fora do lucro)', PEN: 'A classificar'
+    APL: 'Aplicação ou resgate', TRF: 'Transferência entre contas', OUT: 'Outros (fora do lucro)', PEN: 'A classificar',
+    GRA: 'Graciola (à parte)'
   };
-  var CLASSES = [CL.REC, CL.DESP, CL.PRO, CL.RET, CL.APO, CL.APL, CL.TRF, CL.OUT, CL.PEN];
+  var CLASSES = [CL.REC, CL.DESP, CL.PRO, CL.RET, CL.GRA, CL.APO, CL.APL, CL.TRF, CL.OUT, CL.PEN];
   var CLASSE_INFO = {};
   CLASSE_INFO[CL.REC] = 'Entrada do escritório (honorários etc.). Entra no lucro.';
   CLASSE_INFO[CL.DESP] = 'Gasto do escritório. Reduz o lucro.';
@@ -33,20 +34,32 @@
   CLASSE_INFO[CL.TRF] = 'Transferência entre as contas da DH e da Consultoria. Fica fora do lucro.';
   CLASSE_INFO[CL.OUT] = 'Movimento que não é receita nem despesa (empréstimo, estorno...).';
   CLASSE_INFO[CL.PEN] = 'Ainda não foi classificado.';
+  CLASSE_INFO[CL.GRA] = 'Notas da Graciola e o DAS pago sobre elas. Controle à parte: não entra no lucro real.';
   var CAT_DESP = ['Salário', 'Comissão', 'Benefícios', 'Estrutura', 'Aluguel e condomínio', 'Tributos', 'Serviços', 'Marketing', 'Reembolso', 'Tarifas bancárias', 'Cartão de crédito', 'Outros'];
   var CAT_REC = ['Honorários', 'Reembolso de custas', 'Rendimentos', 'Outros'];
   function catsDe(classe) { return classe === CL.DESP ? CAT_DESP : (classe === CL.REC ? CAT_REC : []); }
-  function classeCss(c) { return { 'Receita': 'rec', 'Despesa': 'desp', 'Pró-labore Mariana': 'pro', 'Retirada Mariana': 'ret', 'Aporte Mariana': 'apo', 'A classificar': 'pen' }[c] || 'fora'; }
+  function classeCss(c) { return { 'Receita': 'rec', 'Despesa': 'desp', 'Pró-labore Mariana': 'pro', 'Retirada Mariana': 'ret', 'Aporte Mariana': 'apo', 'A classificar': 'pen', 'Graciola (à parte)': 'gra' }[c] || 'fora'; }
+
+  /* ---------- salário fixo da Mariana (o que conta como custo dela no lucro real) ---------- */
+  function salarioMariana() { var v = moneyN(CFG && CFG.ProLaboreMariana); return v > 0 ? v : 22738; }
+  window.dhExSalario = function () {
+    var atual = salarioMariana();
+    var v = prompt('Salário mensal da Mariana que entra como custo no lucro real (R$):', String(atual).replace('.', ','));
+    if (v === null) return; var n = moneyN(v); if (!(n > 0)) { alert('Valor inválido.'); return; }
+    CFG.ProLaboreMariana = n; render();
+    google.script.run.withFailureHandler(function (e) { alert('Não consegui salvar: ' + e.message); }).apiSetConfig('ProLaboreMariana', n);
+  };
 
   /* ---------- regras ---------- */
   var SUGESTOES = [
+    ['GRACIOLA', CL.GRA, ''],
     ['PRO LABORE', CL.PRO, ''], ['PRO-LABORE', CL.PRO, ''], ['PROLABORE', CL.PRO, ''],
     ['MARIANA', CL.RET, ''],
     ['DOMINGUES CONS', CL.TRF, ''], ['DOMINGUES E HEROLD', CL.TRF, ''], ['DOMINGUES & HEROLD', CL.TRF, ''],
     ['TARIFA', CL.DESP, 'Tarifas bancárias'], ['TAR PACOTE', CL.DESP, 'Tarifas bancárias'], ['CESTA DE SERVICOS', CL.DESP, 'Tarifas bancárias'],
     ['SIMPLES NACIONAL', CL.DESP, 'Tributos'], ['DARF', CL.DESP, 'Tributos'], ['FGTS', CL.DESP, 'Tributos'], ['GPS', CL.DESP, 'Tributos'], ['INSS', CL.DESP, 'Tributos'],
     ['BB RENDE FACIL', CL.APL, ''], ['RENDE FACIL', CL.APL, ''], ['APLICACAO', CL.APL, ''], ['RESGATE', CL.APL, ''], ['CDB', CL.APL, ''],
-    ['FATURA', CL.DESP, 'Cartão de crédito'], ['CARTAO', CL.DESP, 'Cartão de crédito']
+    ['FATURA', CL.RET, ''], ['CARTAO', CL.RET, '']
   ];
   function regras() {
     var minhas = (DATA.extratoRegras || []).filter(function (r) { return String(r.Contem || '').trim(); });
@@ -234,9 +247,15 @@
     }
     return { linhas: out, ignorados: ign };
   }
+  function chaveCA(l) { return l.catCA + ' @ ' + l.contaCA; }
   function mapaCA() { try { return JSON.parse((CFG && CFG.ContaAzulMapa) || '{}') || {}; } catch (e) { return {}; } }
-  function classeSugeridaCA(cat, valor) {
-    var c = norm(cat);
+  function classeSugeridaCA(cat, valor, conta) {
+    var c = norm(cat), ct = norm(conta);
+    if (/GRACIOLA/.test(c)) return CL.GRA;
+    // DAS pago na conta da Domingues & Herold (CEF) é o imposto das notas da Graciola
+    if (/SIMPLES|\bDAS\b/.test(c) && /CEF|CAIXA|HEROLD/.test(ct)) return CL.GRA;
+    // cartão debitado na Consultoria é de uso só da Mariana
+    if (/CART(AO|OES)/.test(c) && /CONSULTORIA/.test(ct)) return CL.RET;
     if (/APLICA|RESGATE|INVESTIMENTO/.test(c)) return CL.APL;
     if (/REPASSE|TRANSFER/.test(c)) return CL.TRF;
     if (/DISTRIBUI|LUCRO|RETIRADA/.test(c)) return CL.RET;
@@ -250,11 +269,11 @@
     var m = mapaCA(); m.cats = m.cats || {}; m.contas = m.contas || {};
     var cats = {}, contas = {};
     PREV.linhas.forEach(function (l) {
-      var k = l.catCA; var o = cats[k] = cats[k] || { n: 0, v: 0 }; o.n++; o.v += l.Valor;
+      var k = chaveCA(l); var o = cats[k] = cats[k] || { n: 0, v: 0, cat: l.catCA, conta: l.contaCA }; o.n++; o.v += l.Valor;
       contas[l.contaCA] = (contas[l.contaCA] || 0) + 1;
     });
     PREV.mapa = { cats: {}, contas: {} };
-    Object.keys(cats).forEach(function (k) { PREV.mapa.cats[k] = m.cats[k] || classeSugeridaCA(k, cats[k].v); });
+    Object.keys(cats).forEach(function (k) { PREV.mapa.cats[k] = m.cats[k] || classeSugeridaCA(cats[k].cat, cats[k].v, cats[k].conta); });
     Object.keys(contas).forEach(function (k) { PREV.mapa.contas[k] = m.contas[k] || contaPadraoCA(k); });
     PREV.catsInfo = cats;
     var datas = PREV.linhas.map(function (l) { return l.Data; }).sort();
@@ -266,10 +285,10 @@
         return '<div><label>' + esc(k) + ' (' + contas[k] + ') no CRM se chama</label><input class="ex-ca-conta" data-k="' + esc(k) + '" list="exContasDL3" value="' + esc(PREV.mapa.contas[k]) + '" onchange="dhExCaAtualiza()"></div>';
       }).join('') + '<datalist id="exContasDL3">' + contasConhecidas().map(function (c) { return '<option value="' + esc(c) + '">'; }).join('') + '</datalist></div>' +
       '<div class="msec">Categorias do Conta Azul → classe no CRM</div>' +
-      '<div class="scroll"><table class="dh-tbl ex-ca-tbl"><thead><tr><th>Categoria no Conta Azul</th><th class="r">Lanç.</th><th class="r">Total</th><th>Classe no CRM</th></tr></thead><tbody>' +
+      '<div class="scroll"><table class="dh-tbl ex-ca-tbl"><thead><tr><th>Categoria no Conta Azul · conta</th><th class="r">Lanç.</th><th class="r">Total</th><th>Classe no CRM</th></tr></thead><tbody>' +
       ordem.map(function (k) {
         var c = cats[k], cl = PREV.mapa.cats[k];
-        return '<tr><td>' + esc(k) + (m.cats[k] ? '' : ' <span class="ex-novo">nova</span>') + '</td><td class="r">' + c.n + '</td><td class="r ' + (c.v < 0 ? 'neg' : 'pos') + '">' + brl(c.v) + '</td><td>' +
+        return '<tr><td>' + esc(c.cat) + ' <span class="ex-ca-ct">' + esc(c.conta) + '</span>' + (m.cats[k] ? '' : ' <span class="ex-novo">nova</span>') + '</td><td class="r">' + c.n + '</td><td class="r ' + (c.v < 0 ? 'neg' : 'pos') + '">' + brl(c.v) + '</td><td>' +
           selClasse('', cl, 'data-k="' + esc(k) + '" onchange="this.className=\'ex-sel ex-ca-cl ex-c-\'+dhExCss(this.value);dhExCaAtualiza()"').replace('class="ex-sel', 'class="ex-sel ex-ca-cl') + '</td></tr>';
       }).join('') + '</tbody></table></div><div id="exCaResumo"></div></div>' +
       '<div class="mfoot"><button class="btn ghost" onclick="closeModal()">Cancelar</button><button class="btn" id="exBtnImp" onclick="dhExConfirmarCA()">Importar</button></div>';
@@ -282,7 +301,7 @@
     return PREV.linhas.map(function (l) {
       var base = l.Data + '|' + l.Valor + '|' + norm(l.Descricao).slice(0, 60) + (l.parte ? '|p' + l.parte : '');
       var k0 = norm(l.contaCA) + ':' + base; seq[k0] = (seq[k0] || 0) + 1;
-      var classe = PREV.mapa.cats[l.catCA] || CL.PEN;
+      var classe = PREV.mapa.cats[chaveCA(l)] || CL.PEN;
       return { Data: l.Data, Descricao: l.Descricao, Valor: l.Valor, Conta: PREV.mapa.contas[l.contaCA] || l.contaCA, Classe: classe,
         Categoria: l.catCA, Chave: 'CA:' + k0 + (seq[k0] > 1 ? '|' + seq[k0] : ''), Obs: l.Obs || '' };
     });
@@ -390,12 +409,13 @@
 
   /* ---------- cálculo do resumo ---------- */
   function resumo(lista) {
-    var r = { rec: 0, desp: 0, pro: 0, ret: 0, apo: 0, apl: 0, trf: 0, out: 0, pen: 0, penN: 0, catD: {}, catR: {} };
+    var r = { rec: 0, desp: 0, proPago: 0, ret: 0, apo: 0, apl: 0, trf: 0, out: 0, pen: 0, penN: 0, graRec: 0, graDesp: 0, catD: {}, catR: {} }, meses = {};
     lista.forEach(function (x) {
-      var v = num(x.Valor), c = x.Classe || CL.PEN;
+      var v = num(x.Valor), c = x.Classe || CL.PEN; meses[ymOf(x.Data)] = 1;
       if (c === CL.REC) { r.rec += v; var k = x.Categoria || 'Outros'; r.catR[k] = (r.catR[k] || 0) + v; }
       else if (c === CL.DESP) { r.desp += -v; var k2 = x.Categoria || 'Outros'; r.catD[k2] = (r.catD[k2] || 0) + (-v); }
-      else if (c === CL.PRO) r.pro += -v;
+      else if (c === CL.PRO) r.proPago += -v;
+      else if (c === CL.GRA) { if (v > 0) r.graRec += v; else r.graDesp += -v; }
       else if (c === CL.RET) r.ret += -v;
       else if (c === CL.APO) r.apo += v;
       else if (c === CL.APL) r.apl += v;
@@ -403,7 +423,13 @@
       else if (c === CL.OUT) r.out += v;
       else { r.pen += v; r.penN++; }
     });
-    r.oper = r.rec - r.desp; r.lucro = r.oper - r.pro; r.ficou = r.lucro - r.ret;
+    r.meses = Object.keys(meses).filter(Boolean).length;
+    r.salario = salarioMariana(); r.pro = r.salario * r.meses;        // salário fixo × meses do período
+    r.oper = r.rec - r.desp; r.lucro = r.oper - r.pro;
+    r.marTot = r.proPago + r.ret;                                      // o que a Mariana tirou de fato
+    r.acima = r.marTot - r.pro;                                        // retirada além do salário (= lucro retirado)
+    r.ficou = r.oper - r.marTot;
+    r.gra = r.graRec - r.graDesp;
     return r;
   }
   window.dhExtratoResumo = function (filtroMes) { // usado por Dados financeiros
@@ -454,14 +480,21 @@
     var catsD = Object.keys(r.catD).sort(function (a, b) { return r.catD[b] - r.catD[a]; });
     h += '<div class="dh-grid g2 ex-top"><div class="card dh-card fc-card">' + lbl('Resultado · ' + perNome(p)) +
       '<table class="dh-tbl ex-dre"><tbody>' +
-      linhaDre('Entradas do escritório (receitas)', r.rec, 'pos') +
+      linhaDre('Entradas do escritório (sem Graciola)', r.rec, 'pos') +
       linhaDre('(−) Despesas do escritório', -r.desp, 'neg', catsD.slice(0, 4).map(function (c) { return esc(c) + ' ' + brl(r.catD[c]); }).join(' · ')) +
       linhaDre('= Resultado operacional', r.oper, 'tot') +
-      linhaDre('(−) Pró-labore Mariana', -r.pro, 'neg') +
+      linhaDre('(−) Salário da Mariana', -r.pro, 'neg', brl(r.salario) + ' × ' + r.meses + ' mês(es) · <a href="#" onclick="event.preventDefault();dhExSalario()">alterar valor</a>') +
       linhaDre('= Lucro real', r.lucro, 'tot big') +
-      linhaDre('(−) Retiradas da Mariana', -r.ret, 'neg', 'PIX para ela, gastos pessoais no cartão etc.') +
-      linhaDre('= Ficou na empresa', r.ficou, 'tot') +
       '</tbody></table>' +
+      '<div class="ex-box"><div class="ex-box-t">Mariana no período</div>' +
+        '<div class="ex-box-l"><span>Tirou de fato (PIX para ela, cartão, salário pago)</span><b>' + brl(r.marTot) + '</b></div>' +
+        '<div class="ex-box-l"><span>Salário previsto</span><b>' + brl(r.pro) + '</b></div>' +
+        '<div class="ex-box-l tot"><span>' + (r.acima >= 0 ? 'Retirou de lucro (além do salário)' : 'Retirou a menos que o salário') + '</span><b>' + brl(Math.abs(r.acima)) + '</b></div>' +
+        '<div class="ex-box-l"><span>Ficou na empresa (resultado − o que ela tirou)</span><b class="' + (r.ficou < 0 ? 'neg' : 'pos') + '">' + brl(r.ficou) + '</b></div></div>' +
+      (r.graRec || r.graDesp ? '<div class="ex-box ex-gra"><div class="ex-box-t">Graciola · controle à parte</div>' +
+        '<div class="ex-box-l"><span>Notas recebidas</span><b>' + brl(r.graRec) + '</b></div>' +
+        '<div class="ex-box-l"><span>(−) DAS sobre as notas</span><b>' + brl(-r.graDesp) + '</b></div>' +
+        '<div class="ex-box-l tot"><span>Líquido Graciola</span><b>' + brl(r.gra) + '</b></div></div>' : '') +
       '<div class="ex-fora"><span>Fora do lucro:</span> Aportes da Mariana ' + brl(r.apo) + ' · Aplicações/resgates ' + brl(r.apl) + ' · Transferências entre contas ' + brl(r.trf) + ' · Outros ' + brl(r.out) + '</div>' +
       (r.penN ? '<div class="ex-pend" onclick="dhExSet(\'classe\',\'' + CL.PEN + '\')">⚠ <b>' + r.penN + ' lançamento(s) a classificar</b> (' + brl(r.pen) + '): não entram no resultado até você classificar. Clique para ver.</div>' : '') +
       '</div>';
@@ -474,14 +507,16 @@
       var m = ymOf(x.Data); if (!pm[m]) return;
       if (x.Classe === CL.PRO) pm[m].pro += -num(x.Valor); else if (x.Classe === CL.RET) pm[m].ret += -num(x.Valor);
     });
-    var tp = 0, tr = 0;
+    var tp = 0, tr = 0, ta = 0, sal = salarioMariana();
     h += '<div class="card dh-card fc-card">' + lbl('Saídas da Mariana · ' + ano) +
-      '<table class="dh-tbl ex-mar"><thead><tr><th>Mês</th><th class="r">Pró-labore</th><th class="r">Retiradas</th><th class="r">Total</th></tr></thead><tbody>' +
+      '<table class="dh-tbl ex-mar"><thead><tr><th>Mês</th><th class="r">Salário pago</th><th class="r">Retiradas e cartão</th><th class="r">Total</th><th class="r">Além do salário</th></tr></thead><tbody>' +
       Object.keys(pm).map(function (m) {
-        var o = pm[m]; tp += o.pro; tr += o.ret; if (!o.pro && !o.ret) return '';
-        return '<tr onclick="dhExSet(\'per\',\'' + m + '\')" style="cursor:pointer"><td>' + MES_C[+m.slice(5) - 1] + '/' + m.slice(2, 4) + '</td><td class="r">' + brl(o.pro) + '</td><td class="r">' + brl(o.ret) + '</td><td class="r"><b>' + brl(o.pro + o.ret) + '</b></td></tr>';
+        var o = pm[m]; if (!o.pro && !o.ret) return '';
+        var t = o.pro + o.ret, a = t - sal; tp += o.pro; tr += o.ret; ta += a;
+        return '<tr onclick="dhExSet(\'per\',\'' + m + '\')" style="cursor:pointer"><td>' + MES_C[+m.slice(5) - 1] + '/' + m.slice(2, 4) + '</td><td class="r">' + brl(o.pro) + '</td><td class="r">' + brl(o.ret) + '</td><td class="r"><b>' + brl(t) + '</b></td><td class="r ' + (a > 0 ? 'neg' : '') + '">' + brl(a) + '</td></tr>';
       }).join('') +
-      '<tr class="ex-mar-tot"><td>Total ' + ano + '</td><td class="r">' + brl(tp) + '</td><td class="r">' + brl(tr) + '</td><td class="r">' + brl(tp + tr) + '</td></tr></tbody></table>' +
+      '<tr class="ex-mar-tot"><td>Total ' + ano + '</td><td class="r">' + brl(tp) + '</td><td class="r">' + brl(tr) + '</td><td class="r">' + brl(tp + tr) + '</td><td class="r">' + brl(ta) + '</td></tr></tbody></table>' +
+      '<div class="miuda" style="margin-top:8px">"Além do salário" = total que ela tirou no mês − salário de ' + brl(sal) + '.</div>' +
       (tp + tr ? '' : '<div class="empty">Nenhuma saída da Mariana classificada ainda. Crie a regra "MARIANA → Retirada Mariana" ou classifique os lançamentos.</div>') + '</div></div>';
 
     // lista de lançamentos
