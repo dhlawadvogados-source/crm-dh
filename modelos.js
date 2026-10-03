@@ -111,5 +111,58 @@
     });
   }
   window.dhMontarModelos = montar;
+
+  /* ---------- exportar a lista de contratos (com os filtros da tela) ---------- */
+  window.dhExportarContratos = function () {
+    if (typeof XLSX === 'undefined') { alert('A biblioteca de planilhas ainda não carregou. Recarregue a página e tente de novo.'); return; }
+    function v(id) { var e = document.getElementById(id); return e ? e.value : ''; }
+    var f = v('cl_filtro'), sf = v('cl_status_f'), q = v('cl_busca').toLowerCase().trim();
+    var lista = (DATA.clientes || []).filter(function (x) {
+      if (f && String(x.Tipo).toLowerCase().indexOf(f) < 0) return false;
+      if (sf) { var s = String(x.Status || '').toLowerCase(); if (sf === 'ativo') { if (!(s.indexOf('ativo') >= 0 && s.indexOf('inativo') < 0)) return false; } else if (s.indexOf(sf) < 0) return false; }
+      if (q && String(x.Nome || '').toLowerCase().indexOf(q) < 0) return false;
+      return true;
+    }).sort(function (a, b) { return String(a.Nome).trim().localeCompare(String(b.Nome).trim(), 'pt-BR'); });
+    if (!lista.length) { alert('Nenhum contrato com esses filtros.'); return; }
+    function dt(x) { var d = parseD(x); return d || ''; }
+    function n(x) { var r = moneyN(x); return x === '' || x == null || isNaN(r) ? '' : r; }
+    var COLS = [
+      ['Cliente', function (x) { return String(x.Nome || '').trim(); }, 44],
+      ['Tipo', function (x) { return x.Tipo || ''; }, 20], ['Subtipo', function (x) { return x.Subtipo || ''; }, 14],
+      ['Situação', function (x) { return x.Status || ''; }, 12],
+      ['Mensalidade (R$)', function (x) { return n(x.ValorMensalidade); }, 16, 'R$ #,##0.00'],
+      ['Dia vencimento', function (x) { return n(x.DiaVencimento); }, 10],
+      ['Forma de pagamento', function (x) { return x.FormaPagamento || ''; }, 18],
+      ['Início', function (x) { return dt(x.DataInicio); }, 12, 'dd/mm/yyyy'], ['Fim', function (x) { return dt(x.DataFim); }, 12, 'dd/mm/yyyy'],
+      ['Responsável', function (x) { return x.Responsavel || ''; }, 14],
+      ['Horas contratadas', function (x) { return n(x.HorasContratadas); }, 10], ['Processos contratados', function (x) { return n(x.ProcessosContratados); }, 10],
+      ['Valor hora extra (R$)', function (x) { return n(x.ValorHoraExtra); }, 14, 'R$ #,##0.00'], ['Valor processo extra (R$)', function (x) { return n(x.ValorProcessoExtra); }, 14, 'R$ #,##0.00'],
+      ['Valor audiência (R$)', function (x) { return n(x.ValorAudiencia); }, 14, 'R$ #,##0.00'], ['% êxito', function (x) { return n(x.PercGanho); }, 9],
+      ['Próximo reajuste', function (x) { return dt(x.DataReajuste); }, 13, 'dd/mm/yyyy'], ['Índice', function (x) { return x.IndiceReajuste || ''; }, 9],
+      ['Observações', function (x) { return x.Obs || ''; }, 40]
+    ];
+    var aoa = [COLS.map(function (c) { return c[0]; })].concat(lista.map(function (x) { return COLS.map(function (c) { return c[1](x); }); }));
+    var tot = lista.reduce(function (a, x) { var m = n(x.ValorMensalidade); return a + (m || 0); }, 0);
+    aoa.push([]); aoa.push(['Total (' + lista.length + ' contratos)', '', '', '', Math.round(tot * 100) / 100]);
+    var ws = XLSX.utils.aoa_to_sheet(aoa, { cellDates: true });
+    ws['!cols'] = COLS.map(function (c) { return { wch: c[2] }; });
+    ws['!autofilter'] = { ref: XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: lista.length, c: COLS.length - 1 } }) };
+    ws['!freeze'] = { xSplit: 1, ySplit: 1 };
+    for (var r = 1; r <= aoa.length; r++) COLS.forEach(function (c, ci) {
+      if (!c[3]) return; var cell = ws[XLSX.utils.encode_cell({ r: r, c: ci })]; if (cell && cell.v !== '') cell.z = c[3];
+    });
+    var wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'Contratos');
+    var hoje = new Date(), nome = 'Contratos_DH_' + hoje.getFullYear() + ('0' + (hoje.getMonth() + 1)).slice(-2) + ('0' + hoje.getDate()).slice(-2) + '.xlsx';
+    XLSX.writeFile(wb, nome);
+  };
+  function montarExportar() {
+    var ref = document.getElementById('cl_toggleBtn'); if (!ref || document.getElementById('cl_exportar')) return;
+    var b = document.createElement('button'); b.type = 'button'; b.id = 'cl_exportar'; b.className = 'btn ghost dh-modelo';
+    b.title = 'Baixar a lista de contratos (com os filtros atuais) em Excel';
+    b.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>Exportar Excel';
+    b.onclick = window.dhExportarContratos; b.style.marginLeft = '8px';
+    ref.parentNode.insertBefore(b, ref.nextSibling);
+  }
+  document.addEventListener('DOMContentLoaded', montarExportar);
   document.addEventListener('DOMContentLoaded', montar);
 })();

@@ -53,7 +53,7 @@
   function perPadrao() { return { tipo: 'mes', ym: ymOf(hoje()) }; }
   function perAtual() {
     if (PER) return PER;
-    try { var s0 = JSON.parse(localStorage.getItem('crm_fin_periodo') || 'null'); if (s0 && (s0.ym || s0.ano)) PER = s0; } catch (e) {}
+    try { var s0 = JSON.parse(localStorage.getItem('crm_fin_periodo') || 'null'); if (s0 && (s0.ym || s0.ano) && String(s0.ym || s0.ano).slice(0, 4) >= '2026') PER = s0; } catch (e) {}
     return PER || (PER = perPadrao());
   }
   function perMeses(per) {
@@ -76,7 +76,8 @@
     (DATA.receber || []).forEach(function (x) { ver(x.Vencimento); });
     (DATA.pagar || []).forEach(function (x) { ver(x.Data); });
     if (max > ymAdd(atual, 12)) max = ymAdd(atual, 12);
-    if (min < ymAdd(atual, -36)) min = ymAdd(atual, -36);
+    if (min < '2026-01') min = '2026-01';   // só de 2026 para frente
+    if (max < min) max = min;
     var meses = [], anos = {};
     for (var m = max; m >= min; m = ymAdd(m, -1)) { meses.push(m); anos[m.slice(0, 4)] = 1; }
     var per = perAtual(), selV = per.tipo === 'ano' ? per.ano : per.ym;
@@ -210,7 +211,7 @@
   function calcEvolucao() {
     var per = perAtual(), meses = [];
     if (per.tipo === 'ano') meses = perMeses(per);
-    else for (var i = -6; i <= 0; i++) meses.push(ymAdd(per.ym, i));
+    else for (var i = -6; i <= 0; i++) { var mm = ymAdd(per.ym, i); if (mm >= '2026-01') meses.push(mm); }
     return meses.map(function (m) {
       var ex = typeof window.dhExtratoResumo === 'function' ? window.dhExtratoResumo(function (ym) { return ym === m; }) : null;
       if (ex) return { m: m, ent: ex.rec, sai: ex.desp + ex.pro, luc: ex.lucro, ext: true };
