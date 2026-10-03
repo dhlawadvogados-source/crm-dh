@@ -390,7 +390,8 @@
   function recarregar() { if (typeof loadData === 'function') loadData(false); }
 
   /* ---------- estado da tela ---------- */
-  var ESTADO = { per: null, conta: '', classe: '', busca: '', sel: {}, limite: 200 };
+  var POR_PAG = 50;
+  var ESTADO = { per: null, conta: '', classe: '', busca: '', sel: {}, pag: 1, aberta: (function () { try { return localStorage.getItem('crm_ext_lista') === '1'; } catch (e) { return false; } })() };
   function periodos() {
     var ms = {}; (DATA.extrato || []).forEach(function (x) { var m = ymOf(x.Data); if (m) ms[m] = 1; });
     return Object.keys(ms).sort().reverse();
@@ -406,7 +407,7 @@
   function perNome(p) { return p === '*' ? 'todo o período' : (p.length === 4 ? 'ano de ' + p : MES_L[+p.slice(5, 7) - 1] + '/' + p.slice(0, 4)); }
   window.dhExSet = function (k, v) {
     ESTADO[k] = v; if (k === 'per') { try { localStorage.setItem('crm_ext_periodo', v); } catch (e) {} }
-    if (k !== 'sel') ESTADO.sel = {}; ESTADO.limite = 200; render();
+    if (k !== 'sel') ESTADO.sel = {}; ESTADO.pag = 1; if (k === 'classe' && v) abrirLista(true); render();
   };
 
   /* ---------- para onde vai cada lançamento (regras escolhidas pela usuária + padrões da DH) ---------- */
@@ -636,14 +637,29 @@
     var lista = doPer.filter(function (x) { return (!ESTADO.classe || (x.Classe || CL.PEN) === ESTADO.classe) && (!q || norm(x.Descricao).indexOf(q) >= 0 || norm(x.Obs).indexOf(q) >= 0 || norm(x.Categoria).indexOf(q) >= 0); })
       .sort(function (a, b) { return String(b.Data).localeCompare(String(a.Data)) || (num(a.Valor) - num(b.Valor)); });
     var nSel = Object.keys(ESTADO.sel).length;
-    h += '<div class="card dh-card fc-card" id="exLista"><div class="dh-head">' + lbl('Lançamentos (' + lista.length + ')') +
-      '<input type="search" class="ex-busca" placeholder="Buscar na descrição ou categoria..." value="' + esc(ESTADO.busca) + '" oninput="dhExBusca(this.value)"></div>' +
+    var btnLista = '<button class="btn ' + (ESTADO.aberta ? 'ghost' : '') + ' ex-btn-lista" onclick="dhExLista()">' + (ESTADO.aberta ? 'Esconder lançamentos ▴' : 'Ver lançamentos (' + lista.length + ') ▾') + '</button>';
+    if (!ESTADO.aberta) {
+      h += '<div class="card dh-card fc-card ex-lista-fechada" id="exLista"><div class="dh-head">' + lbl('Lançamentos (' + lista.length + ')') + btnLista + '</div></div>';
+      v.innerHTML = h; return;
+    }
+    var nPag = Math.max(1, Math.ceil(lista.length / POR_PAG)); if (ESTADO.pag > nPag) ESTADO.pag = nPag;
+    var ini = (ESTADO.pag - 1) * POR_PAG, pagina = lista.slice(ini, ini + POR_PAG);
+    function paginacao() {
+      if (nPag < 2) return '';
+      var bts = [], de = Math.max(1, ESTADO.pag - 3), ate = Math.min(nPag, de + 6); de = Math.max(1, ate - 6);
+      if (de > 1) bts.push('<button class="ex-pg" onclick="dhExPag(1)">1</button>' + (de > 2 ? '<span class="ex-pg-r">…</span>' : ''));
+      for (var i = de; i <= ate; i++) bts.push('<button class="ex-pg' + (i === ESTADO.pag ? ' on' : '') + '" onclick="dhExPag(' + i + ')">' + i + '</button>');
+      if (ate < nPag) bts.push((ate < nPag - 1 ? '<span class="ex-pg-r">…</span>' : '') + '<button class="ex-pg" onclick="dhExPag(' + nPag + ')">' + nPag + '</button>');
+      return '<div class="ex-pgs"><span class="ex-pg-info">' + (ini + 1) + '–' + (ini + pagina.length) + ' de ' + lista.length + '</span>' + bts.join('') + '</div>';
+    }
+    h += '<div class="card dh-card fc-card" id="exLista"><div class="dh-head">' + lbl('Lançamentos (' + lista.length + ')') + btnLista + '</div>' +
+      '<input type="search" class="ex-busca" style="width:100%;margin-top:10px" placeholder="Buscar na descrição ou categoria..." value="' + esc(ESTADO.busca) + '" oninput="dhExBusca(this.value)">' +
       '<div class="lc-f ex-chips"><button class="segbtn' + (!ESTADO.classe ? ' on' : '') + '" onclick="dhExSet(\'classe\',\'\')">Todas (' + doPer.length + ')</button>' +
       CLASSES.filter(function (c) { return cont[c]; }).map(function (c) { return '<button class="segbtn ex-chip-' + classeCss(c) + (ESTADO.classe === c ? ' on' : '') + '" onclick="dhExSet(\'classe\',\'' + c + '\')">' + c + ' (' + cont[c] + ')</button>'; }).join('') + '</div>' +
       (nSel ? '<div class="ex-lote"><b>' + nSel + ' selecionado(s)</b> · classificar como ' + selClasse('', CL.DESP, 'id="exLoteC" onchange="dhExLoteCat()"') + ' <span id="exLoteCatBox">' + selCat('', CL.DESP, 'id="exLoteCat"') + '</span>' +
         ' <button class="btn fc-mini" onclick="dhExLote()">Aplicar</button> <button class="btn ghost fc-mini" onclick="dhExExcluirSel()">Excluir</button> <button class="btn ghost fc-mini" onclick="dhExSet(\'sel\',{})">Limpar seleção</button></div>' : '') +
       '<div class="scroll"><table class="dh-tbl ex-tbl"><thead><tr><th><input type="checkbox" onclick="dhExSelTodos(this.checked)"></th><th>Data</th><th>Descrição</th><th>Conta</th><th class="r">Valor</th><th>Classe</th><th>Categoria</th><th></th></tr></thead><tbody>' +
-      lista.slice(0, ESTADO.limite).map(function (x) {
+      pagina.map(function (x) {
         var id = esc(String(x.ID)), val = num(x.Valor), c = x.Classe || CL.PEN;
         return '<tr class="' + (c === CL.PEN ? 'ex-pen-row' : '') + '"><td><input type="checkbox" ' + (ESTADO.sel[x.ID] ? 'checked' : '') + ' onclick="dhExSel(\'' + id + '\',this.checked)"></td>' +
           '<td class="ex-dt">' + fmtD(x.Data) + '</td><td class="ex-desc">' + esc(x.Descricao) + (x.Obs ? '<small>' + esc(x.Obs) + '</small>' : '') + '</td><td class="ex-conta">' + esc(x.Conta) + '</td>' +
@@ -654,13 +670,15 @@
           '<button class="fc-edit" title="Criar regra a partir deste lançamento" onclick="dhExNovaRegra(\'' + id + '\')">★</button>' +
           '<button class="fc-del" title="Excluir" onclick="dhExExcluir(\'' + id + '\')"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></button></td></tr>';
       }).join('') + '</tbody></table></div>' +
-      (lista.length > ESTADO.limite ? '<div style="text-align:center;margin-top:12px"><button class="btn ghost" onclick="dhExMais()">Mostrar mais (' + (lista.length - ESTADO.limite) + ')</button></div>' : '') +
+      paginacao() +
       (lista.length ? '' : '<div class="empty">Nenhum lançamento com esse filtro.</div>') + '</div>';
     v.innerHTML = h;
   }
   var tBusca = null;
-  window.dhExBusca = function (q) { ESTADO.busca = q; clearTimeout(tBusca); tBusca = setTimeout(function () { var pos = document.activeElement && document.activeElement.selectionStart; render(); var i = document.querySelector('.ex-busca'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }, 250); };
-  window.dhExMais = function () { ESTADO.limite += 300; render(); };
+  window.dhExBusca = function (q) { ESTADO.busca = q; ESTADO.pag = 1; clearTimeout(tBusca); tBusca = setTimeout(function () { var pos = document.activeElement && document.activeElement.selectionStart; render(); var i = document.querySelector('.ex-busca'); if (i) { i.focus(); try { i.setSelectionRange(pos, pos); } catch (e) {} } }, 250); };
+  function abrirLista(on) { ESTADO.aberta = on; try { localStorage.setItem('crm_ext_lista', on ? '1' : '0'); } catch (e) {} }
+  window.dhExLista = function () { abrirLista(!ESTADO.aberta); render(); if (ESTADO.aberta) { var c = $('exLista'); if (c) c.scrollIntoView({ behavior: 'smooth', block: 'start' }); } };
+  window.dhExPag = function (n) { ESTADO.pag = n; render(); var c = $('exLista'); if (c) c.scrollIntoView({ block: 'start' }); };
   window.dhExImportar = importar;
 
   /* ---------- edição ---------- */
