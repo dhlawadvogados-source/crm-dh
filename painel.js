@@ -344,7 +344,7 @@
             : '<div class="dh-split"><div><span>Previsto em Pagar</span><b>' + brl0(sd.prev) + '</b></div><div><span>Fora das despesas</span><b>' + brl0(sd.fora) + '</b></div></div>') + '</div>' +
       '<div class="card dh-card dh-lucro" onclick="' + (ex ? 'dhExDetalhe(\'luc\')' : 'goTo(\'extrato\')') + '">' + lbl('Lucro real · ' + perNome()) +
         '<div class="dh-row"><span class="dh-ico ' + (luc < 0 ? 'warn' : 'ok') + '">' + ic('bars', 24) + '</span><div><div class="dh-money ' + (luc < 0 ? 'warn' : 'pos') + '">' + brl0(luc) + '</div><div class="dh-sub">entradas − saídas · margem ' + Math.round(margem) + '%</div></div></div>' +
-        (ex ? '<div class="dh-split"><div><span>Mariana tirou de fato</span><b>' + brl0(ex.marTot) + '</b></div><div><span>Ficou na empresa</span><b>' + brl0(ex.ficou) + '</b></div></div>' +
+        (ex ? '<div class="dh-split"><div><span>Retiradas Mariana</span><b>' + brl0(ex.ret) + '</b></div></div>' +
               (ex.penN ? '<div class="dh-sub dh-aviso">⚠ ' + ex.penN + ' lançamento(s) do extrato a classificar</div>' : '')
             : '<div class="dh-sub dh-aviso">Importe o extrato na aba Extrato bancário para ver o lucro real.</div>') + '</div>';
 
@@ -500,5 +500,18 @@
     fundo.onclick = function () { abrir(false); };
     side.addEventListener('click', function (e) { if (e.target.closest('nav a')) abrir(false); });
   }
-  document.addEventListener('DOMContentLoaded', function () { setTela('painel'); montarMenuCelular(); });
+  // botão do topo: mostrar/esconder as descrições (textos pequenos de explicação) em todo o CRM
+  function lerDet() { try { return localStorage.getItem('crm_detalhes') === '1'; } catch (e) { return false; } }
+  function aplicarDet(on) {
+    document.body.classList.toggle('dh-detalhes', on);
+    var b = document.getElementById('tbDet'); if (b) { b.classList.toggle('on', on); b.title = on ? 'Esconder descrições' : 'Mostrar descrições'; b.querySelector('span').textContent = on ? 'Esconder detalhes' : 'Mostrar detalhes'; }
+  }
+  window.dhToggleDetalhes = function () { var on = !document.body.classList.contains('dh-detalhes'); try { localStorage.setItem('crm_detalhes', on ? '1' : '0'); } catch (e) {} aplicarDet(on); };
+  function montarBotaoDet() {
+    var alvo = document.querySelector('.tb-right2'); if (!alvo || document.getElementById('tbDet')) return;
+    var b = document.createElement('button'); b.id = 'tbDet'; b.type = 'button'; b.className = 'tb-det';
+    b.innerHTML = '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg><span></span>';
+    b.onclick = window.dhToggleDetalhes; alvo.insertBefore(b, alvo.firstChild); aplicarDet(lerDet());
+  }
+  document.addEventListener('DOMContentLoaded', function () { setTela('painel'); montarMenuCelular(); montarBotaoDet(); });
 })();

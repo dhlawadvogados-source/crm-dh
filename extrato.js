@@ -601,16 +601,12 @@
       linhaDre('(−) Salário da Mariana', -r.pro, 'neg', brl(r.salario) + ' × ' + r.meses + ' mês(es) · <a href="#" onclick="event.preventDefault();dhExSalario()">alterar valor</a>') +
       linhaDre('= Lucro real', r.lucro, 'tot big') +
       '</tbody></table>' +
-      '<div class="ex-box"><div class="ex-box-t">Mariana no período</div>' +
-        '<div class="ex-box-l"><span>Tirou de fato (PIX para ela, cartão, salário pago)</span><b>' + brl(r.marTot) + '</b></div>' +
-        '<div class="ex-box-l"><span>Salário previsto</span><b>' + brl(r.pro) + '</b></div>' +
-        '<div class="ex-box-l tot"><span>' + (r.acima >= 0 ? 'Retirou de lucro (além do salário)' : 'Retirou a menos que o salário') + '</span><b>' + brl(Math.abs(r.acima)) + '</b></div>' +
-        '<div class="ex-box-l"><span>Ficou na empresa (resultado − o que ela tirou)</span><b class="' + (r.ficou < 0 ? 'neg' : 'pos') + '">' + brl(r.ficou) + '</b></div></div>' +
+      '<div class="ex-box"><div class="ex-box-l tot" style="border:0;margin:0;padding:0"><span>Retiradas da Mariana<small class="dh-desc"> · lucro, cartão, Tier, custas e reembolsos da sócia (além do salário)</small></span><b>' + brl(r.ret) + '</b></div></div>' +
       (r.graRec || r.graDesp ? '<div class="ex-box ex-gra"><div class="ex-box-t">Graciola · controle à parte</div>' +
         '<div class="ex-box-l"><span>Notas recebidas</span><b>' + brl(r.graRec) + '</b></div>' +
         '<div class="ex-box-l"><span>(−) DAS sobre as notas</span><b>' + brl(-r.graDesp) + '</b></div>' +
         '<div class="ex-box-l tot"><span>Líquido Graciola</span><b>' + brl(r.gra) + '</b></div></div>' : '') +
-      '<div class="ex-fora"><span>Fora do lucro:</span> Aportes da Mariana ' + brl(r.apo) + ' · Aplicações/resgates ' + brl(r.apl) + ' · Transferências entre contas ' + brl(r.trf) + ' · Outros ' + brl(r.out) + '</div>' +
+      '<div class="ex-fora dh-desc"><span>Fora do lucro:</span> Aportes da Mariana ' + brl(r.apo) + ' · Aplicações/resgates ' + brl(r.apl) + ' · Transferências entre contas ' + brl(r.trf) + ' · Outros ' + brl(r.out) + '</div>' +
       (r.penN ? '<div class="ex-pend" onclick="dhExSet(\'classe\',\'' + CL.PEN + '\')">⚠ <b>' + r.penN + ' lançamento(s) a classificar</b> (' + brl(r.pen) + '): não entram no resultado até você classificar. Clique para ver.</div>' : '') +
       '</div>';
 
@@ -631,7 +627,7 @@
         return '<tr onclick="dhExSet(\'per\',\'' + m + '\')" style="cursor:pointer"><td>' + MES_C[+m.slice(5) - 1] + '/' + m.slice(2, 4) + '</td><td class="r">' + brl(o.pro) + '</td><td class="r">' + brl(o.ret) + '</td><td class="r"><b>' + brl(t) + '</b></td><td class="r ' + (a > 0 ? 'neg' : '') + '">' + brl(a) + '</td></tr>';
       }).join('') +
       '<tr class="ex-mar-tot"><td>Total ' + ano + '</td><td class="r">' + brl(tp) + '</td><td class="r">' + brl(tr) + '</td><td class="r">' + brl(tp + tr) + '</td><td class="r">' + brl(ta) + '</td></tr></tbody></table>' +
-      '<div class="miuda" style="margin-top:8px">"Além do salário" = total que ela tirou no mês − salário de ' + brl(sal) + '.</div>' +
+      '<div class="miuda dh-desc" style="margin-top:8px">"Além do salário" = total que ela tirou no mês − salário de ' + brl(sal) + '.</div>' +
       (tp + tr ? '' : '<div class="empty">Nenhuma saída da Mariana classificada ainda. Crie a regra "MARIANA → Retirada Mariana" ou classifique os lançamentos.</div>') + '</div></div>';
 
     // lista de lançamentos

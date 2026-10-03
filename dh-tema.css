@@ -469,3 +469,16 @@ html,body{background:linear-gradient(to right,var(--dh-marinho) 0,var(--dh-marin
 .ex-esc-tag.ex-dest-RET a{color:#2B3E85;} .ex-esc-tag.ex-dest-GRA a{color:#C2541E;}
 .ex-esc-add select{height:38px;max-width:200px;}
 .ex-mover{max-width:210px;font-size:11.5px;}
+/* descrições escondidas por padrão; botão "Mostrar detalhes" no topo */
+body:not(.dh-detalhes) .dh-desc,
+body:not(.dh-detalhes) .ex-dre small,
+body:not(.dh-detalhes) .ex-fora,
+body:not(.dh-detalhes) .dh-sub.dh-fora,
+body:not(.dh-detalhes) #app span.miuda:not([id]),
+body:not(.dh-detalhes) #app p.miuda,
+body:not(.dh-detalhes) .view > .miuda{display:none !important;}
+.tb-det{display:inline-flex;align-items:center;gap:7px;height:34px;padding:0 12px;border-radius:18px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#C9D2F0;font:600 10.5px Montserrat,sans-serif;letter-spacing:1.2px;text-transform:uppercase;cursor:pointer;margin-right:12px;}
+.tb-det:hover{background:rgba(255,255,255,.08);color:#fff;}
+.tb-det.on{background:rgba(35,185,214,.18);border-color:var(--dh-ciano);color:#fff;}
+@media (max-width:860px){ .tb-det span{display:none;} .tb-det{padding:0 9px;margin-right:6px;} }
+.fin-head .fin-acoes{margin-left:auto;}
