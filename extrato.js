@@ -255,8 +255,8 @@
     if (/GRACIOLA/.test(c)) return CL.GRA;
     // DAS pago na conta da Domingues & Herold (CEF) é o imposto das notas da Graciola
     if (/SIMPLES|\bDAS\b/.test(c) && /CEF|CAIXA|HEROLD/.test(ct)) return CL.GRA;
-    // cartão debitado na Consultoria é de uso só da Mariana
-    if (/CART(AO|OES)/.test(c) && valor < 0) return CL.RET;
+    // cartão debitado na Consultoria é de uso só da Mariana (o da Caixa é despesa normal do escritório)
+    if (/CART(AO|OES)/.test(c) && valor < 0 && /CONSULTORIA/.test(ct)) return CL.RET;
     if (valor < 0 && (/\bSOCIA\b/.test(c) && !/SALARIO/.test(c) || /TIER/.test(c))) return CL.RET;
     if (/APLICA|RESGATE|INVESTIMENTO/.test(c)) return CL.APL;
     if (/REPASSE|TRANSFER/.test(c)) return CL.TRF;
@@ -432,7 +432,7 @@
     var cat = norm(x.Categoria || ''), conta = norm(x.Conta || ''), v = num(x.Valor), txt = cat + ' ' + norm(x.Descricao || '');
     if (/GRACIOLA/.test(txt)) return { d: 'GRA', m: 'Graciola' };
     if (v < 0 && /SIMPLES|\bDAS\b/.test(cat) && /CEF|CAIXA|HEROLD/.test(conta)) return { d: 'GRA', m: 'DAS da Domingues & Herold = imposto da Graciola' };
-    if (v < 0 && /CART(AO|OES)/.test(cat)) return { d: 'RET', m: 'cartão de crédito da Mariana' };
+    if (v < 0 && /CART(AO|OES)/.test(cat) && /CONSULTORIA/.test(conta)) return { d: 'RET', m: 'cartão de crédito da Mariana (Consultoria)' };
     if (v < 0 && /\bSOCIA\b/.test(cat) && !/SALARIO/.test(cat)) return { d: 'RET', m: 'gasto da sócia' };
     if (v < 0 && /LUCRO MARIANA|DISTRIBUI/.test(cat)) return { d: 'RET', m: 'lucro da Mariana' };
     return null;
