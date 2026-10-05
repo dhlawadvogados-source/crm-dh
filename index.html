@@ -1191,9 +1191,10 @@ function renderSalModal(){
      '<div style="margin:10px 0 4px"><button class="btn" style="background:#2f8f5b" onclick="salAddItem()">'+(editSalItem?'💾 Salvar alteração':'💾 Salvar lançamento')+'</button>'+(editSalItem?' <button class="btn" style="background:#8791a1" onclick="salCancelEdit()">Cancelar</button>':' <button class="btn" style="background:#23B9D6" onclick="salPuxarComissoes()">Puxar comissões do mês</button>')+'</div>';
   var fixos=[];if(passAuto>0)fixos.push('passagem');if(empAuto>0)fixos.push('empréstimo');
   h+='<div class="msec" style="margin-top:14px">Lançamentos ('+itens.length+(fixos.length?(' + '+fixos.join(' e ')+' recorrente'):'')+')</div>';
-  if(itens.length||empAuto>0||passAuto>0){
+  if(itens.length||empAuto>0||passAuto>0||b.passExcluida){
     h+='<div class="scroll" style="overflow-x:auto"><table><thead><tr><th>Tipo</th><th>Descrição</th><th class="c">Parc.</th><th class="r">Valor</th><th></th></tr></thead><tbody>';
-    if(passAuto>0){h+='<tr style="background:#FFF4EE"><td><span class="tag a">Passagem</span></td><td>Passagem por dia útil (cadastro) <span class="miuda">'+(b.passAutoInfo||'')+'</span></td><td class="c"></td><td class="r">'+brl(passAuto)+'</td><td class="c"><span class="miuda">automático</span></td></tr>';}
+    if(passAuto>0){h+='<tr style="background:#FFF4EE"><td><span class="tag a">Passagem</span></td><td>Passagem por dia útil (cadastro) <span class="miuda">'+(b.passAutoInfo||'')+'</span></td><td class="c"></td><td class="r">'+brl(passAuto)+'</td><td class="c" style="white-space:nowrap"><span class="miuda">automático</span> <button class="del" title="Excluir a passagem automática deste mês (ex.: dias úteis reais foram diferentes)" onclick="salTogglePassagemAuto(true)">✕</button></td></tr>';}
+    else if(b.passExcluida){h+='<tr style="background:#f1f2f5"><td><span class="tag a">Passagem</span></td><td>Passagem por dia útil — <b>excluída este mês</b> <span class="miuda">('+(b.passAutoInfo||'')+')</span></td><td class="c"></td><td class="r">R$ 0,00</td><td class="c" style="white-space:nowrap"><button class="del" style="color:#2f8f5b" title="Reativar o cálculo automático deste mês" onclick="salTogglePassagemAuto(false)">↺ Reativar</button></td></tr>';}
     if(empAuto>0){h+='<tr style="background:#fdf3f4"><td><span class="tag rr">Empréstimo</span></td><td>Empréstimo fixo (cadastro)</td><td class="c">'+(b.empAutoParc||'')+'</td><td class="r" style="color:#b23a48">- '+brl(empAuto)+'</td><td class="c"><span class="miuda">automático</span></td></tr>';}
     itens.forEach(function(l){var neg=salDesconta(l.Tipo);var parc=(l.ParcelaAtual||l.ParcelaTotal)?((l.ParcelaAtual||'?')+'/'+(l.ParcelaTotal||'?')):'';var descFull=(l.Descricao||'')+(l.Cliente?(' · '+l.Cliente):'');
       var canProj=(parseInt(l.ParcelaTotal,10)||0)>(parseInt(l.ParcelaAtual,10)||0)&&(parseInt(l.ParcelaAtual,10)||0)>=1&&String(l.ID).slice(0,3)!=='tmp';
@@ -1222,6 +1223,13 @@ function salAddItem(){
 function salProjetar(id){call('apiProjetarParcelas',[id],function(res){if(res&&res.success){var n=res.data.criados||0;loadDataThen(function(){renderSalModal();renderSalarios();});alert(n>0?('Projetei '+n+' parcela(s) nos próximos meses.'):'Nenhuma parcela nova para projetar (já estavam lançadas ou já é a última).');}else alert('Erro: '+((res&&res.error)||''));});}
 function salEditItem(id){var x=(DATA.lancamentosSalario||[]).filter(function(r){return String(r.ID)==String(id);})[0];if(!x)return;editSalItem=id;renderSalModal();el('sl_tipo').value=x.Tipo||'Comissão';el('sl_valor').value=(x.Valor!=null&&x.Valor!=='')?String(x.Valor).replace('.',','):'';el('sl_desc').value=x.Descricao||'';el('sl_cli').value=x.Cliente||'';el('sl_pa').value=x.ParcelaAtual||'';el('sl_pt').value=x.ParcelaTotal||'';slTipoChange();window.scrollTo(0,0);}
 function salDelItem(id){if(!confirm('Excluir este lançamento?'))return;DATA.lancamentosSalario=(DATA.lancamentosSalario||[]).filter(function(r){return String(r.ID)!=String(id);});renderSalModal();call('apiDelete',['LancamentosSalario',id],function(res){loadDataThen(function(){renderSalModal();renderSalarios();});});}
+function salTogglePassagemAuto(excluir){
+  if(excluir&&!confirm('Excluir a passagem automática de '+salColabNome+' em '+mesLabel(salColabMes)+'? Os dias úteis variaram esse mês — você pode reativar depois.'))return;
+  call('apiSetSalarioAjuste',[salColabMes,salColabNome,{PassagemExcluida:excluir?'Sim':''}],function(res){
+    if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
+    loadDataThen(function(){renderSalModal();renderSalarios();});
+  });
+}
 function salPuxarComissoes(){call('apiPuxarComissoesMes',[salColabMes,salColabNome],function(res){if(res&&res.success){loadDataThen(function(){renderSalModal();renderSalarios();});if(!res.data.criados)alert('Nenhuma comissão nova para este mês (ou já estavam lançadas).');}else alert('Erro: '+((res&&res.error)||''));});}
 function copiarQuadroSalarios(){
   if(!lastFolhaRows.length){alert('Abra a folha do mês primeiro.');return;}
