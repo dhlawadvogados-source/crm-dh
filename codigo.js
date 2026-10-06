@@ -35,7 +35,7 @@ var SHEETS = {
   FechamentoConsultivo: ["Mes","Cliente","Tarefa","Data","Duracao","Responsavel"],
   FechamentoExtras:     ["Mes","Cliente","HorasProcessual","Audiencias","ValorAudiencias","ExcessoProcessos","ValorProcessos","DescricaoProcessos","Custas","DescricaoCustas","DescricaoAudiencias"],
   Colaboradores: ["ID","Nome","SalarioFixo","PassagemDia","DiariaValor","DiariaDia","EmpValor","EmpParcelaRef","EmpMesRef","EmpTotal","DataInicio","PIX","Conta","Ativo","Obs"],
-  SalariosAjuste: ["Mes","Nome","Comissao","Reembolso","ReembolsoDesc","Passagem","Emprestimo","Outros","OutrosDesc","Obs","PassagemExcluida"],
+  SalariosAjuste: ["Mes","Nome","Comissao","Reembolso","ReembolsoDesc","Passagem","Emprestimo","Outros","OutrosDesc","Obs","PassagemExcluida","PassagemDiasManual","DiariaQtdManual"],
   LancamentosSalario: ["ID","Mes","Nome","Tipo","Descricao","Cliente","Valor","ParcelaAtual","ParcelaTotal"],
   Ferias:        ["ID","Nome","Inicio","Fim","Dias","Status","Obs","Vencimento","Saldo"],
   Aniversarios:  ["ID","Nome","Data","PrevisaoReajuste","Obs"],
@@ -1437,8 +1437,18 @@ function folhaMesRows_(mes){
     var iniY,iniM,iniD;
     if(ini){ iniY=parseInt(ini[1],10); iniM=parseInt(ini[2],10)-1; iniD=parseInt(ini[3],10); if(mesIndex_(ini[1]+"-"+ini[2])>mIdx) return; }
     var salFixo=money_(c.SalarioFixo), diariaV=money_(c.DiariaValor);
+    var ajuste=ajustePorNome[norm_(c.Nome)];
     var base=0, baseInfo="";
-    if(diariaV>0){ var q=contaDiaSemana_(mes, c.DiariaDia||2); base=round2_(diariaV*q); baseInfo=q+" diária(s) x R$ "+brl2_(diariaV); }
+    var diariaQtdAuto=0, diariaQtdManual=null;
+    if(diariaV>0){
+      diariaQtdAuto=contaDiaSemana_(mes, c.DiariaDia||2);
+      var dqRaw=(ajuste && ajuste.DiariaQtdManual!=null)?String(ajuste.DiariaQtdManual).trim():"";
+      var dqManual=dqRaw!==""?parseFloat(dqRaw.replace(",",".")):null;
+      if(dqManual!=null && !isNaN(dqManual)) diariaQtdManual=dqManual;
+      var q=(diariaQtdManual!=null)?diariaQtdManual:diariaQtdAuto;
+      base=round2_(diariaV*q);
+      baseInfo=q+" diária(s) x R$ "+brl2_(diariaV)+(diariaQtdManual!=null?" (ajustado; automático seria "+diariaQtdAuto+")":"");
+    }
     else{
       base=salFixo; baseInfo="Salário fixo";
       if(ini && iniY===parseInt(mes.split("-")[0],10) && (iniM+1)===parseInt(mes.split("-")[1],10) && iniD>1){
@@ -1461,21 +1471,26 @@ function folhaMesRows_(mes){
       if(parc>=1 && (tot===0||parc<=tot)){ empAuto=empValor; empAutoParc=parc+(tot?("/"+tot):""); }
     }
     // Passagem recorrente do cadastro: dias úteis (seg-sex) do mês x valor por dia. Aparece sempre, como lembrete e já calculada.
-    // Pode ser excluída pontualmente para um mês (ex.: feriado ou falta que muda os dias úteis reais) via SalariosAjuste.PassagemExcluida.
-    var passAuto=0, passAutoInfo="", passExcluida=false;
+    // A quantidade de dias pode ser ajustada manualmente para um mês específico (os dias úteis reais variam: feriados, faltas etc.) via SalariosAjuste.PassagemDiasManual.
+    var passAuto=0, passAutoInfo="", passDiasAuto=0, passDiasManual=null;
     var passDia=money_(c.PassagemDia);
-    var ajuste=ajustePorNome[norm_(c.Nome)];
     if(passDia>0){
-      var du=diasUteis_(mes);
-      passAutoInfo=du+" dias úteis x R$ "+brl2_(passDia);
-      if(ajuste && norm_(ajuste.PassagemExcluida)==="sim"){ passExcluida=true; }
-      else { passAuto=round2_(passDia*du); }
+      passDiasAuto=diasUteis_(mes);
+      var pdRaw=(ajuste && ajuste.PassagemDiasManual!=null)?String(ajuste.PassagemDiasManual).trim():"";
+      var pdManual=pdRaw!==""?parseFloat(pdRaw.replace(",",".")):null;
+      if(pdManual==null && ajuste && norm_(ajuste.PassagemExcluida)==="sim") pdManual=0; // compatibilidade com o botão "excluir" antigo
+      if(pdManual!=null && !isNaN(pdManual)) passDiasManual=pdManual;
+      var du=(passDiasManual!=null)?passDiasManual:passDiasAuto;
+      passAutoInfo=du+" dia(s) útil(eis) x R$ "+brl2_(passDia)+(passDiasManual!=null?" (ajustado; automático seria "+passDiasAuto+")":"");
+      passAuto=round2_(passDia*du);
     }
     var total=round2_(base+add+passAuto-sub-empAuto);
     rows.push({ nome:c.Nome, base:round2_(base), baseInfo:baseInfo,
       comissao:round2_(sums.comissao), reembolso:round2_(sums.reembolso), passagem:round2_(sums.passagem+passAuto),
       diaria:round2_(sums.diaria), outros:round2_(sums.outros), emprestimo:round2_(sums.emprestimo+empAuto),
-      empAuto:round2_(empAuto), empAutoParc:empAutoParc, passAuto:round2_(passAuto), passAutoInfo:passAutoInfo, passExcluida:passExcluida,
+      empAuto:round2_(empAuto), empAutoParc:empAutoParc, passAuto:round2_(passAuto), passAutoInfo:passAutoInfo,
+      passDiasAuto:passDiasAuto, passDiasManual:passDiasManual,
+      diariaQtdAuto:diariaQtdAuto, diariaQtdManual:diariaQtdManual, diariaValor:money_(c.DiariaValor),
       itens:itens, total:total, pix:String(c.PIX||""), conta:String(c.Conta||""), obs:String(c.Obs||"") });
   });
   return rows;
@@ -1537,10 +1552,10 @@ function apiSetSalarioAjuste(mes, nome, obj){
   try{
     mes=String(mes||"").slice(0,7); nome=String(nome||"").trim(); obj=obj||{};
     var sh=getDb_().getSheetByName("SalariosAjuste");
-    if(!sh){ sh=getDb_().insertSheet("SalariosAjuste"); sh.getRange(1,1,1,10).setValues([["Mes","Nome","Comissao","Reembolso","ReembolsoDesc","Passagem","Emprestimo","Outros","OutrosDesc","PassagemExcluida"]]); }
+    if(!sh){ sh=getDb_().insertSheet("SalariosAjuste"); sh.getRange(1,1,1,12).setValues([["Mes","Nome","Comissao","Reembolso","ReembolsoDesc","Passagem","Emprestimo","Outros","OutrosDesc","PassagemExcluida","PassagemDiasManual","DiariaQtdManual"]]); }
     // auto-corrige: cria as colunas que faltarem, para nunca falhar a gravação
     var head0=sh.getRange(1,1,1,Math.max(1,sh.getLastColumn())).getValues()[0];
-    var precisa=["Mes","Nome","Comissao","Reembolso","ReembolsoDesc","Passagem","Emprestimo","Outros","OutrosDesc","PassagemExcluida"];
+    var precisa=["Mes","Nome","Comissao","Reembolso","ReembolsoDesc","Passagem","Emprestimo","Outros","OutrosDesc","PassagemExcluida","PassagemDiasManual","DiariaQtdManual"];
     var faltam=precisa.filter(function(c){ return head0.indexOf(c)<0; });
     if(faltam.length){ sh.getRange(1,head0.length+1,1,faltam.length).setValues([faltam]); }
     var vals=sh.getDataRange().getValues(); var head=vals[0];
@@ -1555,6 +1570,8 @@ function apiSetSalarioAjuste(mes, nome, obj){
     if("Outros" in obj && ci.Outros!=null) row[ci.Outros]=obj.Outros;
     if("OutrosDesc" in obj && ci.OutrosDesc!=null) row[ci.OutrosDesc]=obj.OutrosDesc;
     if("PassagemExcluida" in obj && ci.PassagemExcluida!=null) row[ci.PassagemExcluida]=obj.PassagemExcluida;
+    if("PassagemDiasManual" in obj && ci.PassagemDiasManual!=null) row[ci.PassagemDiasManual]=obj.PassagemDiasManual;
+    if("DiariaQtdManual" in obj && ci.DiariaQtdManual!=null) row[ci.DiariaQtdManual]=obj.DiariaQtdManual;
     row[ci.Mes]=mes; row[ci.Nome]=nome;
     if(lin>=0) sh.getRange(lin+1,1,1,row.length).setValues([row]); else sh.appendRow(row);
     return ok_({saved:true});
