@@ -1631,6 +1631,9 @@ function avosNoAno_(dataInicioStr, ano){
 // Soma, mês a mês (cada avo), o salário/diária BASE realmente vigente naquele mês — usando a aba HistoricoSalarial
 // quando ela tiver o valor daquele mês/pessoa, e caindo para a base vigente em dezembro (cadastro atual) quando não tiver.
 // Isso deixa o 13º "proporcional" de verdade quando houve reajuste no meio do ano (ex.: Igor em setembro/2026).
+// Sócios/pró-labore não entram no 13º/PLR de empregados (têm distribuição de lucros própria, à parte).
+var SOCIOS_FORA_13_PLR = ["mariana"];
+function ehSocioForaDecimoPLR_(nome){ var nk=norm_(nome); return SOCIOS_FORA_13_PLR.some(function(s){ return nk===s || nk.indexOf(s+" ")===0; }); }
 function decimoTerceiroRows_(ano){
   var hist={};
   objRows_("HistoricoSalarial").forEach(function(h){
@@ -1643,6 +1646,7 @@ function decimoTerceiroRows_(ano){
   var rows=[];
   cols.forEach(function(c){
     if(norm_(c.Ativo).indexOf("sim")<0 && String(c.Ativo||"")!=="") return;
+    if(ehSocioForaDecimoPLR_(c.Nome)) return;
     var avos=avosNoAno_(c.DataInicio, ano);
     if(avos<=0) return;
     var nk=norm_(c.Nome);
@@ -1684,6 +1688,7 @@ function plrRows_(ano){
   var rows=[];
   cols.forEach(function(c){
     if(norm_(c.Ativo).indexOf("sim")<0 && String(c.Ativo||"")!=="") return;
+    if(ehSocioForaDecimoPLR_(c.Nome)) return;
     var m=String(c.DataInicio||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
     if(!m) { rows.push({nome:c.Nome, dataInicio:"", anos:0, percentual:0, base:(baseByName[norm_(c.Nome)]||money_(c.SalarioFixo)), valor:0, semData:true}); return; }
     var ini=new Date(parseInt(m[1],10),parseInt(m[2],10)-1,parseInt(m[3],10));

@@ -305,14 +305,9 @@ input.rvenc:focus{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px 
           <button class="btn" style="background:#F86C2E" onclick="dpLancar('parcela2')">Lançar 2ª parcela 13º (Contas a Pagar)</button>
           <span style="display:inline-flex;gap:6px;align-items:center"><input id="dp_plr_data" type="date" class="mini" style="width:140px"><button class="btn" style="background:#2f8f5b" onclick="dpLancarPLR()">Lançar PLR (Contas a Pagar)</button></span>
         </div>
-        <div class="miuda" style="margin:8px 0 0">O 13º soma, mês a mês, o salário/diária realmente vigente em cada mês trabalhado (usa o histórico abaixo quando preenchido; sem histórico, usa o valor atual de dezembro). A PLR usa o tempo de casa completo até 31/dez e a tabela de faixas mais abaixo — ajuste as faixas e os valores recalculam na hora.</div>
+        <div class="miuda" style="margin:8px 0 0">O 13º soma, mês a mês, o salário/diária realmente vigente em cada mês trabalhado (usa o histórico de cada pessoa quando preenchido; sem histórico, usa o valor atual de dezembro). A PLR usa o tempo de casa completo até 31/dez e a tabela de faixas mais abaixo. Clique no nome do colaborador pra ver/editar o salário mês a mês dele e a data de início.</div>
       </div>
       <div class="card"><div class="scroll" id="tblDecimoPLR"></div></div>
-      <div class="card">
-        <h3>Histórico salarial do ano (para o 13º proporcional)</h3>
-        <div class="miuda" style="margin:0 0 8px">Preencha só os meses em que o salário/diária foi <b>diferente do valor atual</b> (ex.: antes de um reajuste). Deixe em branco pra usar o valor atual de dezembro automaticamente.</div>
-        <div id="tblHistoricoSalarial"></div>
-      </div>
       <div class="card">
         <h3>Faixas da PLR por tempo de casa</h3>
         <div class="miuda" style="margin:0 0 8px">Percentual sobre 1 salário-base. "Anos até" vazio = sem limite superior (ex.: 10 anos ou mais).</div>
@@ -1322,6 +1317,7 @@ function fillDpAnos(){
   sel.innerHTML=anos.map(function(y){return '<option value="'+y+'">'+y+'</option>';}).join('');
   if(!dpAnoInit){ sel.value=String(anoAtual); dpAnoInit=true; } else if(prev) sel.value=prev;
 }
+var lastDecimoPLRRows=[], lastDecimoPLRAno='';
 function renderDecimoPLR(){
   fillDpAnos();
   renderPLRFaixasTable();
@@ -1331,12 +1327,12 @@ function renderDecimoPLR(){
   call('apiDecimoPLR',[ano],function(res){
     if(!res||!res.success){box.innerHTML='<div class="empty">Erro: '+((res&&res.error)||'')+'</div>';return;}
     var d=res.data;
+    lastDecimoPLRRows=d.rows; lastDecimoPLRAno=ano;
     if(!d.rows.length){box.innerHTML='<div class="empty">Nenhum colaborador elegível em '+ano+'.</div>';return;}
     var h='<table><thead><tr><th>Colaborador</th><th class="r">Base (dez)</th><th class="c">Avos 13º</th><th class="r">13º integral</th><th class="r">1ª parcela</th><th class="r">2ª parcela</th><th class="c">Anos de casa</th><th class="c">% PLR</th><th class="r">Valor PLR</th><th class="r">Total</th></tr></thead><tbody>';
     d.rows.forEach(function(r){
-      var tip=(r.detalhesMeses||[]).map(function(m){return m.mes+': '+brl(m.valor)+(m.origem==='historico'?' (histórico)':' (atual)');}).join(' | ');
-      h+='<tr><td>'+r.nome+(r.semDataInicio?' <span class="miuda" style="color:#b23a48">(sem data de início — PLR não calculada)</span>':'')+'</td>'+
-         '<td class="r">'+brl(r.base)+'</td><td class="c" title="'+tip+'">'+r.avos+'/12'+(r.temHistorico?' <span class="miuda">✓ hist.</span>':'')+'</td><td class="r">'+brl(r.integral13)+'</td>'+
+      h+='<tr><td><a href="javascript:void(0)" onclick="abrirDecimoPLRColab(\''+escJs(r.nome)+'\')" style="color:#364B9B;font-weight:600;text-decoration:none">'+r.nome+(r.temHistorico?' <span class="miuda" title="tem meses com salário diferente do atual">✓</span>':'')+'</a>'+(r.semDataInicio?' <span class="miuda" style="color:#b23a48">(sem data de início)</span>':'')+'</td>'+
+         '<td class="r">'+brl(r.base)+'</td><td class="c">'+r.avos+'/12</td><td class="r">'+brl(r.integral13)+'</td>'+
          '<td class="r">'+brl(r.parcela1)+'</td><td class="r">'+brl(r.parcela2)+'</td>'+
          '<td class="c">'+r.anosCasa+'</td><td class="c">'+r.percentualPLR+'%</td><td class="r">'+brl(r.valorPLR)+'</td>'+
          '<td class="r"><b>'+brl(r.total)+'</b></td></tr>';
@@ -1344,37 +1340,50 @@ function renderDecimoPLR(){
     h+='<tr style="font-weight:700;background:#FFF4EE"><td>TOTAL</td><td></td><td></td><td class="r">'+brl(d.totais.integral13)+'</td><td class="r">'+brl(d.totais.parcela1)+'</td><td class="r">'+brl(d.totais.parcela2)+'</td><td></td><td></td><td class="r">'+brl(d.totais.plr)+'</td><td class="r">'+brl(d.totais.geral)+'</td></tr>';
     h+='</tbody></table>';
     box.innerHTML=h;
-    renderHistoricoSalarial(ano, d.rows);
   });
-}
-function renderHistoricoSalarial(ano, rows){
-  var box=el('tblHistoricoSalarial'); if(!box) return;
-  if(!rows.length){box.innerHTML='<div class="empty">Nenhum colaborador elegível neste ano.</div>';return;}
-  var hist=((DATA&&DATA.historicoSalarial)||[]).filter(function(h){return monthKeyOf_(h.Mes).slice(0,4)===String(ano);});
-  var histMap={}; hist.forEach(function(h){histMap[monthKeyOf_(h.Mes)+'|'+norm_(h.Nome)]=h.Base;});
-  var meses=['01','02','03','04','05','06','07','08','09','10','11','12'];
-  var h='<div class="scroll" style="overflow-x:auto"><table><thead><tr><th>Colaborador</th>'+meses.map(function(m){return '<th class="c">'+MES_PT[parseInt(m,10)-1]+'</th>';}).join('')+'</tr></thead><tbody>';
-  rows.forEach(function(r){
-    h+='<tr><td>'+r.nome+'</td>'+meses.map(function(m){
-      var mk=ano+'-'+m;
-      var v=histMap[mk+'|'+norm_(r.nome)];
-      return '<td class="c"><input class="hist-cell" data-nome="'+escJs(r.nome)+'" data-mes="'+mk+'" type="text" inputmode="decimal" placeholder="atual" style="width:64px;padding:3px 4px;font-size:12px;text-align:center" value="'+(v!=null?String(v).replace('.',','):'')+'"></td>';
-    }).join('')+'</tr>';
-  });
-  h+='</tbody></table></div><div style="margin-top:8px"><button class="btn" style="background:#2f8f5b" onclick="salvarHistoricoSalarial()">💾 Salvar histórico salarial</button></div>';
-  box.innerHTML=h;
 }
 function norm_(s){return String(s==null?'':s).toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').trim();}
 function monthKeyOf_(v){if(!v)return '';var s=String(v).trim();var m=s.match(/^(\d{4})-(\d{2})/);return m?(m[1]+'-'+m[2]):'';}
-function salvarHistoricoSalarial(){
-  var ano=el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear());
-  var inputs=document.querySelectorAll('.hist-cell');
-  var linhas=[];
-  inputs.forEach(function(inp){ linhas.push({nome:inp.getAttribute('data-nome'), mes:inp.getAttribute('data-mes'), base:inp.value}); });
+var dpModalNome=null;
+function abrirDecimoPLRColab(nome){ dpModalNome=nome; renderDecimoPLRModal(); el('modalBg').classList.add('on'); }
+function renderDecimoPLRModal(){
+  var nome=dpModalNome; if(!nome) return;
+  var ano=lastDecimoPLRAno||(el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear()));
+  var row=(lastDecimoPLRRows||[]).filter(function(r){return r.nome===nome;})[0];
+  var colab=((DATA&&DATA.colaboradores)||[]).filter(function(c){return c.Nome===nome;})[0]||{};
+  var hist=((DATA&&DATA.historicoSalarial)||[]).filter(function(h){return monthKeyOf_(h.Mes).slice(0,4)===String(ano) && norm_(h.Nome)===norm_(nome);});
+  var histMap={}; hist.forEach(function(h){histMap[monthKeyOf_(h.Mes)]=h.Base;});
+  var meses=['01','02','03','04','05','06','07','08','09','10','11','12'];
+  var baseAtual=row?row.base:(moneyN(colab.SalarioFixo)||moneyN(colab.DiariaValor)||0);
+  var h='<div class="mhead"><button class="mclose" onclick="closeModal()">✕</button><h2>'+nome+'</h2><div class="mtags">'+
+    '<span class="tag b">Início (aniversário de contrato): '+(colab.DataInicio?fmtD(colab.DataInicio):'não informada')+'</span>'+
+    '<span class="tag g">Salário/diária atual: '+brl(baseAtual)+'</span>'+
+    (row?('<span class="tag gold">'+row.anosCasa+' ano(s) de casa · '+row.percentualPLR+'% PLR</span>'):'')+
+    '</div></div><div class="mbody">';
+  if(!colab.DataInicio){ h+='<div class="miuda" style="margin:0 0 10px;color:#b23a48">Sem data de início cadastrada — a PLR não calcula pra '+nome+' até você preencher a data no cadastro (✎ ao lado de "Abrir", em Salários).</div>'; }
+  h+='<div class="msec">Salário/diária de '+ano+', mês a mês (pra corrigir o 13º)</div>';
+  h+='<div class="miuda" style="margin:0 0 8px">Em branco = usa o valor atual ('+brl(baseAtual)+'). Preencha só os meses que tiveram um valor diferente (ex.: antes de um reajuste).</div>';
+  h+='<div class="form" style="grid-template-columns:repeat(6,1fr)">'+meses.map(function(m){
+    var mk=ano+'-'+m; var v=histMap[mk];
+    return '<div><label>'+MES_PT[parseInt(m,10)-1]+'</label><input class="dpc-hist-cell" data-mes="'+mk+'" type="text" inputmode="decimal" placeholder="atual" value="'+(v!=null?String(v).replace('.',','):'')+'"></div>';
+  }).join('')+'</div>';
+  h+='<div style="margin-top:12px"><button class="btn" style="background:#2f8f5b" onclick="salvarHistoricoSalarialColab()">💾 Salvar</button></div>';
+  if(row){
+    h+='<div class="msec" style="margin-top:18px">Resumo de '+ano+'</div>';
+    h+='<div class="miuda" style="margin:0">Avos 13º: '+row.avos+'/12 &nbsp;·&nbsp; 13º integral: '+brl(row.integral13)+' (1ª '+brl(row.parcela1)+' + 2ª '+brl(row.parcela2)+') &nbsp;·&nbsp; PLR: '+brl(row.valorPLR)+' &nbsp;·&nbsp; <b>Total: '+brl(row.total)+'</b></div>';
+  }
+  h+='</div><div class="mfoot"><button class="btn" style="background:#e9ecf2;color:#364B9B" onclick="closeModal()">Fechar</button></div>';
+  el('modalCard').innerHTML=h;
+}
+function salvarHistoricoSalarialColab(){
+  var nome=dpModalNome; if(!nome) return;
+  var ano=lastDecimoPLRAno||(el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear()));
+  var inputs=document.querySelectorAll('.dpc-hist-cell');
+  var linhas=[]; inputs.forEach(function(inp){ linhas.push({nome:nome, mes:inp.getAttribute('data-mes'), base:inp.value}); });
   call('apiSalvarHistoricoSalarial',[ano,linhas],function(res){
     if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
-    toast('Histórico salvo ('+res.data.salvos+' alteração(ões)). Recalculando o 13º...');
-    loadDataThen(function(){renderDecimoPLR();});
+    toast('Salvo.');
+    loadDataThen(function(){renderDecimoPLR();renderDecimoPLRModal();});
   });
 }
 function dpLancar(tipo){
