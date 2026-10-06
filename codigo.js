@@ -44,7 +44,8 @@ var SHEETS = {
   PagarPadrao:   ["Descricao","Valor","Categoria","DiaVencimento"],
   Extrato:       ["ID","Data","Descricao","Valor","Conta","Classe","Categoria","Chave","Obs","Importado"],
   ExtratoRegras: ["ID","Contem","Classe","Categoria","Conta","Ordem"],
-  PLRFaixas:     ["ID","AnosMin","AnosMax","Percentual","Obs"]
+  PLRFaixas:     ["ID","AnosMin","AnosMax","Percentual","Obs"],
+  HistoricoSalarial: ["ID","Mes","Nome","Base"]
 };
 
 // Advogados de referencia. VERSAO WEB: os valores/hora ficam so na aba Advogados da planilha.
@@ -340,7 +341,8 @@ function apiGetAll() {
       lancamentosSalario: objRows_("LancamentosSalario"),
       extrato: objRows_("Extrato"),
       extratoRegras: objRows_("ExtratoRegras"),
-      plrFaixas: objRows_("PLRFaixas")
+      plrFaixas: objRows_("PLRFaixas"),
+      historicoSalarial: objRows_("HistoricoSalarial")
     };
     d.dash = dashboardFrom_(d);   // dashboard calculado sem reler as abas
     return ok_(d);
@@ -1625,21 +1627,39 @@ function avosNoAno_(dataInicioStr, ano){
   if(mesInicioEfetivo>12) return 0;
   return 12-mesInicioEfetivo+1;
 }
-// Linhas do 13º salário de um ano: usa como base o salário/diária vigente em dezembro daquele ano
-// (mesma lógica de folhaMesRows_, já trata fixo x diária), multiplicado pelos avos do ano.
+// Linhas do 13º salário de um ano.
+// Soma, mês a mês (cada avo), o salário/diária BASE realmente vigente naquele mês — usando a aba HistoricoSalarial
+// quando ela tiver o valor daquele mês/pessoa, e caindo para a base vigente em dezembro (cadastro atual) quando não tiver.
+// Isso deixa o 13º "proporcional" de verdade quando houve reajuste no meio do ano (ex.: Igor em setembro/2026).
 function decimoTerceiroRows_(ano){
-  var baseRows=folhaMesRows_(ano+"-12");
-  var baseByName={}; baseRows.forEach(function(r){ baseByName[norm_(r.nome)]=Number(r.base)||0; });
+  var hist={};
+  objRows_("HistoricoSalarial").forEach(function(h){
+    var mk=monthKeyOf_(h.Mes); if(mk.slice(0,4)!==String(ano)) return;
+    (hist[mk]=hist[mk]||{})[norm_(h.Nome)]=money_(h.Base);
+  });
+  var baseDezRows=folhaMesRows_(ano+"-12");
+  var baseDezByName={}; baseDezRows.forEach(function(r){ baseDezByName[norm_(r.nome)]=Number(r.base)||0; });
   var cols=objRows_("Colaboradores");
   var rows=[];
   cols.forEach(function(c){
     if(norm_(c.Ativo).indexOf("sim")<0 && String(c.Ativo||"")!=="") return;
     var avos=avosNoAno_(c.DataInicio, ano);
     if(avos<=0) return;
-    var base=baseByName[norm_(c.Nome)]; if(base==null) base=money_(c.SalarioFixo);
-    var integral=round2_(base*avos/12);
+    var nk=norm_(c.Nome);
+    var baseDez=baseDezByName[nk]; if(baseDez==null) baseDez=money_(c.SalarioFixo);
+    var mesFim=12, mesIni=mesFim-avos+1;
+    var somaBases=0, detalhesMeses=[], temHistorico=false;
+    for(var mm=mesIni; mm<=mesFim; mm++){
+      var mk2=ano+"-"+("0"+mm).slice(-2);
+      var doHist=(hist[mk2]&&hist[mk2][nk]!=null)?hist[mk2][nk]:null;
+      var valorMes=(doHist!=null)?doHist:baseDez;
+      if(doHist!=null) temHistorico=true;
+      somaBases+=valorMes;
+      detalhesMeses.push({mes:mk2, valor:round2_(valorMes), origem:(doHist!=null)?"historico":"atual"});
+    }
+    var integral=round2_(somaBases/12);
     var p1=round2_(integral/2), p2=round2_(integral-p1);
-    rows.push({ nome:c.Nome, base:round2_(base), avos:avos, integral:integral, parcela1:p1, parcela2:p2 });
+    rows.push({ nome:c.Nome, base:round2_(baseDez), avos:avos, integral:integral, parcela1:p1, parcela2:p2, detalhesMeses:detalhesMeses, temHistorico:temHistorico });
   });
   return rows;
 }
@@ -1686,6 +1706,7 @@ function apiDecimoPLR(ano){
       var p=plrByName[norm_(r.nome)]||{anos:0,percentual:0,valor:0,semData:false};
       return { nome:r.nome, base:r.base, avos:r.avos, integral13:r.integral, parcela1:r.parcela1, parcela2:r.parcela2,
         anosCasa:p.anos||0, percentualPLR:p.percentual||0, valorPLR:p.valor||0, semDataInicio:!!p.semData,
+        detalhesMeses:r.detalhesMeses||[], temHistorico:!!r.temHistorico,
         total: round2_((r.integral||0)+(p.valor||0)) };
     });
     var totais={integral13:0,parcela1:0,parcela2:0,plr:0,geral:0};
@@ -1707,6 +1728,35 @@ function apiSetPLRFaixa(obj){
   }catch(e){ return err_(e.message); }
 }
 function apiDeletePLRFaixa(id){ try{ apiDelete("PLRFaixas", id); return ok_({deleted:true}); }catch(e){ return err_(e.message); } }
+// Salva (ou limpa) o salário-base real de um colaborador em meses específicos de um ano, pra corrigir o 13º
+// quando houve reajuste no meio do ano. linhas: [{nome, mes:"YYYY-MM", base:"1234,56"}] — base vazio apaga o override (volta a usar o valor atual/dezembro).
+function apiSalvarHistoricoSalarial(ano, linhas){
+  try{
+    ano=parseInt(ano,10); if(!ano) return err_("Ano inválido.");
+    linhas=linhas||[];
+    var existentes=objRows_("HistoricoSalarial");
+    var porChave={}; existentes.forEach(function(h){ porChave[monthKeyOf_(h.Mes)+"|"+norm_(h.Nome)]=h; });
+    var salvos=0;
+    linhas.forEach(function(l){
+      var mes=String(l.mes||"").slice(0,7); var nome=String(l.nome||"").trim();
+      if(!/^\d{4}-\d{2}$/.test(mes) || mes.slice(0,4)!==String(ano) || !nome) return;
+      var chave=mes+"|"+norm_(nome);
+      var existente=porChave[chave];
+      var valorRaw=String(l.base==null?"":l.base).trim();
+      if(valorRaw===""){
+        if(existente){ apiDelete("HistoricoSalarial", existente.ID); salvos++; }
+        return;
+      }
+      var valor=money_(valorRaw);
+      if(existente){
+        if(Number(existente.Base)!==valor){ apiUpdateRow("HistoricoSalarial", existente.ID, {Mes:mes, Nome:nome, Base:valor}); salvos++; }
+      } else {
+        apiAdd("HistoricoSalarial", {Mes:mes, Nome:nome, Base:valor}); salvos++;
+      }
+    });
+    return ok_({salvos:salvos});
+  }catch(e){ return err_(e.message); }
+}
 // Lança no Contas a Pagar o total de uma parcela (13º 1ª/2ª) ou da PLR de um ano, somando todos os colaboradores num único lançamento.
 // Atualiza o lançamento existente (evita duplicar) se já tiver sido lançado antes para o mesmo ano/tipo.
 function apiLancarDecimoPLRPagar(ano, tipo, dataVenc){
