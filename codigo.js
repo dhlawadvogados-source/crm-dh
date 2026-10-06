@@ -43,7 +43,8 @@ var SHEETS = {
   Config:        ["Chave","Valor"],
   PagarPadrao:   ["Descricao","Valor","Categoria","DiaVencimento"],
   Extrato:       ["ID","Data","Descricao","Valor","Conta","Classe","Categoria","Chave","Obs","Importado"],
-  ExtratoRegras: ["ID","Contem","Classe","Categoria","Conta","Ordem"]
+  ExtratoRegras: ["ID","Contem","Classe","Categoria","Conta","Ordem"],
+  PLRFaixas:     ["ID","AnosMin","AnosMax","Percentual","Obs"]
 };
 
 // Advogados de referencia. VERSAO WEB: os valores/hora ficam so na aba Advogados da planilha.
@@ -56,6 +57,14 @@ var CONFIG_REF = [
 // Colaboradores (folha). Cols: Nome,SalarioFixo,PassagemDia,DiariaValor,DiariaDia,EmpValor,EmpParcelaRef,EmpMesRef,EmpTotal,DataInicio,PIX,Conta,Ativo,Obs
 // VERSAO WEB: os dados dos colaboradores (PIX/CPF/salario) ficam so na aba Colaboradores da planilha.
 var COLAB_SEED = [];
+// Faixas do bônus de final de ano (PLR) por tempo de casa, sobre 1 salário — editável na tela "13º e PLR".
+// AnosMin/AnosMax = anos completos de casa (AnosMax vazio = sem limite).
+var PLR_SEED = [
+  ["0","1","65","até 1 ano de casa"],
+  ["1","2","75","até 2 anos de casa"],
+  ["2","4","85","3 anos de casa"],
+  ["4","","100","acima de 4 anos de casa"]
+];
 
 /* ---------- BANCO ---------- */
 var _DB_CACHE = null;
@@ -177,6 +186,10 @@ function ensureSheets_(ss) {
       if (name === "Colaboradores" && COLAB_SEED.length){
         var rows=COLAB_SEED.map(function(r){ return [Utilities.getUuid().replace(/-/g,"").slice(0,8)].concat(r); });
         sh.getRange(2,1,rows.length,rows[0].length).setValues(rows);
+      }
+      if (name === "PLRFaixas" && PLR_SEED.length){
+        var plrRows=PLR_SEED.map(function(r){ return [Utilities.getUuid().replace(/-/g,"").slice(0,8)].concat(r); });
+        sh.getRange(2,1,plrRows.length,plrRows[0].length).setValues(plrRows);
       }
     } else {
       // adiciona colunas novas ao final, sem apagar dados
@@ -326,7 +339,8 @@ function apiGetAll() {
       feriasHistorico: objRows_("FeriasHistorico"),
       lancamentosSalario: objRows_("LancamentosSalario"),
       extrato: objRows_("Extrato"),
-      extratoRegras: objRows_("ExtratoRegras")
+      extratoRegras: objRows_("ExtratoRegras"),
+      plrFaixas: objRows_("PLRFaixas")
     };
     d.dash = dashboardFrom_(d);   // dashboard calculado sem reler as abas
     return ok_(d);
@@ -1595,6 +1609,125 @@ function apiLancarFolhaPagar(mes){
     }
     apiAdd("Pagar",{Descricao:desc, Categoria:"Salário", Valor:total, Data:venc, Pago:"Não"});
     return ok_({criado:true, total:total, colaboradores:r.length});
+  }catch(e){ return err_(e.message); }
+}
+
+/* ---------- 13º SALÁRIO E PARTICIPAÇÃO NOS LUCROS (PLR) ---------- */
+// Quantos avos (meses) do 13º um colaborador tem direito num ano, pela regra de 15 dias:
+// admitido até o dia 15 do mês conta o mês inteiro; depois do dia 15, só a partir do mês seguinte.
+function avosNoAno_(dataInicioStr, ano){
+  var m=String(dataInicioStr||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m) return 12; // sem data de início cadastrada: assume o ano inteiro
+  var y=parseInt(m[1],10), mes=parseInt(m[2],10), dia=parseInt(m[3],10);
+  if(y>ano) return 0;
+  if(y<ano) return 12;
+  var mesInicioEfetivo = dia<=15 ? mes : mes+1;
+  if(mesInicioEfetivo>12) return 0;
+  return 12-mesInicioEfetivo+1;
+}
+// Linhas do 13º salário de um ano: usa como base o salário/diária vigente em dezembro daquele ano
+// (mesma lógica de folhaMesRows_, já trata fixo x diária), multiplicado pelos avos do ano.
+function decimoTerceiroRows_(ano){
+  var baseRows=folhaMesRows_(ano+"-12");
+  var baseByName={}; baseRows.forEach(function(r){ baseByName[norm_(r.nome)]=Number(r.base)||0; });
+  var cols=objRows_("Colaboradores");
+  var rows=[];
+  cols.forEach(function(c){
+    if(norm_(c.Ativo).indexOf("sim")<0 && String(c.Ativo||"")!=="") return;
+    var avos=avosNoAno_(c.DataInicio, ano);
+    if(avos<=0) return;
+    var base=baseByName[norm_(c.Nome)]; if(base==null) base=money_(c.SalarioFixo);
+    var integral=round2_(base*avos/12);
+    var p1=round2_(integral/2), p2=round2_(integral-p1);
+    rows.push({ nome:c.Nome, base:round2_(base), avos:avos, integral:integral, parcela1:p1, parcela2:p2 });
+  });
+  return rows;
+}
+// Retorna o % de PLR (sobre 1 salário-base) para X anos completos de casa, conforme a tabela PLRFaixas.
+function percentualPLR_(anosCompletos, faixas){
+  var pct=0;
+  faixas.forEach(function(f){
+    var min=parseFloat(f.AnosMin); if(isNaN(min))min=0;
+    var maxRaw=String(f.AnosMax==null?"":f.AnosMax).trim();
+    var max=maxRaw===""?null:parseFloat(maxRaw);
+    if(anosCompletos>=min && (max==null || anosCompletos<max)) pct=parseFloat(f.Percentual)||0;
+  });
+  return pct;
+}
+// Linhas da PLR de um ano: tempo de casa em anos completos até 31/dez do ano de referência, x % da tabela PLRFaixas, x base de dezembro.
+function plrRows_(ano){
+  var faixas=objRows_("PLRFaixas");
+  var refDate=new Date(ano,11,31);
+  var baseRows=folhaMesRows_(ano+"-12");
+  var baseByName={}; baseRows.forEach(function(r){ baseByName[norm_(r.nome)]=Number(r.base)||0; });
+  var cols=objRows_("Colaboradores");
+  var rows=[];
+  cols.forEach(function(c){
+    if(norm_(c.Ativo).indexOf("sim")<0 && String(c.Ativo||"")!=="") return;
+    var m=String(c.DataInicio||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if(!m) { rows.push({nome:c.Nome, dataInicio:"", anos:0, percentual:0, base:(baseByName[norm_(c.Nome)]||money_(c.SalarioFixo)), valor:0, semData:true}); return; }
+    var ini=new Date(parseInt(m[1],10),parseInt(m[2],10)-1,parseInt(m[3],10));
+    if(ini>refDate) return; // ainda não tinha entrado até 31/dez daquele ano
+    var anos=Math.floor((refDate-ini)/(1000*60*60*24*365.25));
+    var pct=percentualPLR_(anos, faixas);
+    var base=baseByName[norm_(c.Nome)]; if(base==null) base=money_(c.SalarioFixo);
+    var valor=round2_(base*pct/100);
+    rows.push({ nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:anos, percentual:pct, base:round2_(base), valor:valor });
+  });
+  return rows;
+}
+function apiDecimoPLR(ano){
+  try{
+    ano=parseInt(ano,10); if(!ano) return err_("Ano inválido.");
+    var d13=decimoTerceiroRows_(ano);
+    var plr=plrRows_(ano);
+    var plrByName={}; plr.forEach(function(p){ plrByName[norm_(p.nome)]=p; });
+    var rows=d13.map(function(r){
+      var p=plrByName[norm_(r.nome)]||{anos:0,percentual:0,valor:0,semData:false};
+      return { nome:r.nome, base:r.base, avos:r.avos, integral13:r.integral, parcela1:r.parcela1, parcela2:r.parcela2,
+        anosCasa:p.anos||0, percentualPLR:p.percentual||0, valorPLR:p.valor||0, semDataInicio:!!p.semData,
+        total: round2_((r.integral||0)+(p.valor||0)) };
+    });
+    var totais={integral13:0,parcela1:0,parcela2:0,plr:0,geral:0};
+    rows.forEach(function(r){ totais.integral13+=r.integral13; totais.parcela1+=r.parcela1; totais.parcela2+=r.parcela2; totais.plr+=r.valorPLR; totais.geral+=r.total; });
+    Object.keys(totais).forEach(function(k){ totais[k]=round2_(totais[k]); });
+    return ok_({ano:ano, rows:rows, totais:totais, faixas:objRows_("PLRFaixas")});
+  }catch(e){ return err_(e.message); }
+}
+function apiSetPLRFaixa(obj){
+  try{
+    obj=obj||{};
+    var anosMin=String(obj.anosMin==null?"":obj.anosMin).trim();
+    var percentual=String(obj.percentual==null?"":obj.percentual).trim();
+    if(anosMin===""||percentual==="") return err_("Informe ao menos 'anos a partir de' e o percentual.");
+    var payload={AnosMin:anosMin, AnosMax:String(obj.anosMax==null?"":obj.anosMax).trim(), Percentual:percentual, Obs:obj.obs||""};
+    if(obj.id){ apiUpdateRow("PLRFaixas", obj.id, payload); return ok_({updated:true}); }
+    var r=apiAdd("PLRFaixas", payload);
+    return ok_({created:true, id:r&&r.data&&r.data.id});
+  }catch(e){ return err_(e.message); }
+}
+function apiDeletePLRFaixa(id){ try{ apiDelete("PLRFaixas", id); return ok_({deleted:true}); }catch(e){ return err_(e.message); } }
+// Lança no Contas a Pagar o total de uma parcela (13º 1ª/2ª) ou da PLR de um ano, somando todos os colaboradores num único lançamento.
+// Atualiza o lançamento existente (evita duplicar) se já tiver sido lançado antes para o mesmo ano/tipo.
+function apiLancarDecimoPLRPagar(ano, tipo, dataVenc){
+  try{
+    ano=parseInt(ano,10); if(!ano) return err_("Ano inválido.");
+    var res=apiDecimoPLR(ano); if(!res.success) return res;
+    var total=0, desc="";
+    if(tipo==="parcela1"){ total=res.data.totais.parcela1; desc="13º salário (1ª parcela) "+ano; if(!dataVenc) dataVenc=ano+"-11-30"; }
+    else if(tipo==="parcela2"){ total=res.data.totais.parcela2; desc="13º salário (2ª parcela) "+ano; if(!dataVenc) dataVenc=ano+"-12-20"; }
+    else if(tipo==="plr"){ total=res.data.totais.plr; desc="Participação nos lucros (PLR) "+ano; }
+    else return err_("Tipo inválido.");
+    if(!dataVenc) return err_("Informe a data de pagamento.");
+    if(total<=0) return err_("Valor total é zero — nada para lançar.");
+    var achadas=[]; objRows_("Pagar").forEach(function(p){ if(norm_(p.Categoria)==="salario" && String(p.Descricao||"").indexOf(desc)===0) achadas.push(p); });
+    if(achadas.length){
+      apiUpdateRow("Pagar", achadas[0].ID, {Descricao:desc, Valor:total, Data:dataVenc, Categoria:"Salário"});
+      for(var k=1;k<achadas.length;k++){ apiDelete("Pagar", achadas[k].ID); }
+      return ok_({atualizado:true, total:total});
+    }
+    apiAdd("Pagar",{Descricao:desc, Categoria:"Salário", Valor:total, Data:dataVenc, Pago:"Não"});
+    return ok_({criado:true, total:total});
   }catch(e){ return err_(e.message); }
 }
 

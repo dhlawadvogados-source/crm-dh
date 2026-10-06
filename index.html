@@ -292,6 +292,32 @@ input.rvenc:focus{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px 
       <div class="card"><div class="scroll" id="tblSalarios"></div></div>
     </section>
 
+    <section class="view" id="v-decimoplr"><h2>13º Salário e Participação nos Lucros (PLR)</h2>
+      <div class="card">
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <span><label style="font-size:11px;color:#555">Ano: </label><select id="dp_ano" onchange="renderDecimoPLR()" class="mini"></select></span>
+          <button class="btn" style="background:#F86C2E" onclick="dpLancar('parcela1')">Lançar 1ª parcela 13º (Contas a Pagar)</button>
+          <button class="btn" style="background:#F86C2E" onclick="dpLancar('parcela2')">Lançar 2ª parcela 13º (Contas a Pagar)</button>
+          <span style="display:inline-flex;gap:6px;align-items:center"><input id="dp_plr_data" type="date" class="mini" style="width:140px"><button class="btn" style="background:#2f8f5b" onclick="dpLancarPLR()">Lançar PLR (Contas a Pagar)</button></span>
+        </div>
+        <div class="miuda" style="margin:8px 0 0">O 13º usa como base o salário/diária vigente em dezembro do ano escolhido, proporcional aos meses trabalhados (regra dos 15 dias). A PLR usa o tempo de casa completo até 31/dez e a tabela de faixas abaixo — ajuste as faixas e os valores recalculam na hora.</div>
+      </div>
+      <div class="card"><div class="scroll" id="tblDecimoPLR"></div></div>
+      <div class="card">
+        <h3>Faixas da PLR por tempo de casa</h3>
+        <div class="miuda" style="margin:0 0 8px">Percentual sobre 1 salário-base. "Anos até" vazio = sem limite superior (ex.: 10 anos ou mais).</div>
+        <div class="form" style="grid-template-columns:repeat(4,1fr)">
+          <div><label>Anos a partir de</label><input id="plr_min" type="text" placeholder="ex.: 0"></div>
+          <div><label>Anos até (vazio = sem limite)</label><input id="plr_max" type="text" placeholder="ex.: 1"></div>
+          <div><label>Percentual (%)</label><input id="plr_pct" type="text" placeholder="ex.: 25"></div>
+          <div><label>Observação</label><input id="plr_obs" type="text" placeholder="opcional"></div>
+        </div>
+        <button class="btn" id="plr_btn" onclick="salvarPLRFaixa()">Adicionar faixa</button>
+        <button class="btn" id="plr_cancel" style="display:none;background:#8791a1" onclick="cancelarPLRFaixa()">Cancelar</button>
+        <div class="scroll" id="tblPLRFaixas" style="margin-top:12px"></div>
+      </div>
+    </section>
+
     <section class="view" id="v-ferias"><h2>Férias e Aniversários</h2>
       <datalist id="colabDL"></datalist>
       <div class="card"><h3>Programação de férias</h3>
@@ -482,7 +508,7 @@ input.rvenc:focus{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px 
 </div>
 <script>
 var DATA=null, DASH=null, CFG={}, TODAY=null;
-var TABS=[["painel","Painel"],["receber","Receber"],["pagar","Pagar"],["comissoes","Comissões"],["salarios","Salários"],["ferias","Férias"],["rent","Rentabilidade"],["propostas","Propostas"],["clientes","Contratos"]];
+var TABS=[["painel","Painel"],["receber","Receber"],["pagar","Pagar"],["comissoes","Comissões"],["salarios","Salários"],["decimoplr","13º e PLR"],["ferias","Férias"],["rent","Rentabilidade"],["propostas","Propostas"],["clientes","Contratos"]];
 function el(id){return document.getElementById(id);}
 var NAV_ICONS={
  painel:'<path d="M3 10.8 12 3l9 7.8"/><path d="M5 9.6V21h14V9.6"/>',
@@ -496,6 +522,7 @@ var NAV_ICONS={
  clientes:'<rect x="5.5" y="3" width="13" height="18" rx="2.2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
  relatorio:'<path d="M4.5 20V10.5M10 20V4M15.5 20v-7M21 20H3"/>',
  salarios:'<rect x="2.5" y="6" width="19" height="12" rx="2.5"/><circle cx="12" cy="12" r="2.6"/><path d="M6 12h.01M18 12h.01"/>',
+ decimoplr:'<path d="M12 2v20"/><path d="M17 5.5c0-1.9-2.2-3-5-3s-5 1.1-5 3 2.2 2.6 5 3 5 1.1 5 3-2.2 3-5 3-5-1.1-5-3"/>',
  ferias:'<path d="M12 3v9"/><path d="M12 12c-4 0-7 2.5-7 6h14c0-3.5-3-6-7-6z"/><path d="M12 12c0-4 3-7 7-7"/>'
 };
 function navIcon(id){return '<span class="nav-ic"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'+(NAV_ICONS[id]||'')+'</svg></span>';}
@@ -515,7 +542,7 @@ window.onload=function(){
   TABS.forEach(function(t,i){var a=document.createElement('a');a.innerHTML=navIcon(t[0])+'<span>'+t[1]+'</span>';a.onclick=function(){go(t[0],a);};if(i==0)a.className='active';nav.appendChild(a);});
   loadAll();
 };
-function go(id,a){document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('on',v.id=='v-'+id);});document.querySelectorAll('#nav a').forEach(function(x){x.classList.remove('active');});a.classList.add('active');if(id=='tarefas')renderTarefasTab();if(id=='salarios')renderSalarios();if(id=='ferias')renderFerias();}
+function go(id,a){document.querySelectorAll('.view').forEach(function(v){v.classList.toggle('on',v.id=='v-'+id);});document.querySelectorAll('#nav a').forEach(function(x){x.classList.remove('active');});a.classList.add('active');if(id=='tarefas')renderTarefasTab();if(id=='salarios')renderSalarios();if(id=='ferias')renderFerias();if(id=='decimoplr')renderDecimoPLR();}
 
 function loadData(showLoading){
   if(showLoading){el('loading').style.display='block';el('app').style.display='none';}
@@ -1271,6 +1298,101 @@ function salResetDiariaQtd(){
   });
 }
 function salPuxarComissoes(){call('apiPuxarComissoesMes',[salColabMes,salColabNome],function(res){if(res&&res.success){loadDataThen(function(){renderSalModal();renderSalarios();});if(!res.data.criados)alert('Nenhuma comissão nova para este mês (ou já estavam lançadas).');}else alert('Erro: '+((res&&res.error)||''));});}
+
+/* ---------- 13º E PLR ---------- */
+var dpAnoInit=false;
+function fillDpAnos(){
+  var sel=el('dp_ano'); if(!sel) return;
+  var prev=sel.value;
+  var anoAtual=(TODAY||new Date()).getFullYear();
+  var anos=[]; for(var y=anoAtual-3;y<=anoAtual+1;y++) anos.push(y);
+  sel.innerHTML=anos.map(function(y){return '<option value="'+y+'">'+y+'</option>';}).join('');
+  if(!dpAnoInit){ sel.value=String(anoAtual); dpAnoInit=true; } else if(prev) sel.value=prev;
+}
+function renderDecimoPLR(){
+  fillDpAnos();
+  renderPLRFaixasTable();
+  var ano=el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear());
+  var box=el('tblDecimoPLR'); if(!box) return;
+  box.innerHTML='<div class="empty">Calculando...</div>';
+  call('apiDecimoPLR',[ano],function(res){
+    if(!res||!res.success){box.innerHTML='<div class="empty">Erro: '+((res&&res.error)||'')+'</div>';return;}
+    var d=res.data;
+    if(!d.rows.length){box.innerHTML='<div class="empty">Nenhum colaborador elegível em '+ano+'.</div>';return;}
+    var h='<table><thead><tr><th>Colaborador</th><th class="r">Base (dez)</th><th class="c">Avos 13º</th><th class="r">13º integral</th><th class="r">1ª parcela</th><th class="r">2ª parcela</th><th class="c">Anos de casa</th><th class="c">% PLR</th><th class="r">Valor PLR</th><th class="r">Total</th></tr></thead><tbody>';
+    d.rows.forEach(function(r){
+      h+='<tr><td>'+r.nome+(r.semDataInicio?' <span class="miuda" style="color:#b23a48">(sem data de início — PLR não calculada)</span>':'')+'</td>'+
+         '<td class="r">'+brl(r.base)+'</td><td class="c">'+r.avos+'/12</td><td class="r">'+brl(r.integral13)+'</td>'+
+         '<td class="r">'+brl(r.parcela1)+'</td><td class="r">'+brl(r.parcela2)+'</td>'+
+         '<td class="c">'+r.anosCasa+'</td><td class="c">'+r.percentualPLR+'%</td><td class="r">'+brl(r.valorPLR)+'</td>'+
+         '<td class="r"><b>'+brl(r.total)+'</b></td></tr>';
+    });
+    h+='<tr style="font-weight:700;background:#FFF4EE"><td>TOTAL</td><td></td><td></td><td class="r">'+brl(d.totais.integral13)+'</td><td class="r">'+brl(d.totais.parcela1)+'</td><td class="r">'+brl(d.totais.parcela2)+'</td><td></td><td></td><td class="r">'+brl(d.totais.plr)+'</td><td class="r">'+brl(d.totais.geral)+'</td></tr>';
+    h+='</tbody></table>';
+    box.innerHTML=h;
+  });
+}
+function dpLancar(tipo){
+  var ano=el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear());
+  var label=tipo==='parcela1'?'1ª parcela do 13º':'2ª parcela do 13º';
+  if(!confirm('Lançar a '+label+' de '+ano+' no Contas a Pagar como uma conta única (soma de todos os colaboradores)?'))return;
+  call('apiLancarDecimoPLRPagar',[ano,tipo,''],function(res){
+    if(res&&res.success){toast('Lançado: '+brl(res.data.total));loadData(false);}
+    else alert('Erro: '+((res&&res.error)||''));
+  });
+}
+function dpLancarPLR(){
+  var ano=el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear());
+  var data=val('dp_plr_data');
+  if(!data){alert('Informe a data de pagamento da PLR.');return;}
+  if(!confirm('Lançar a PLR de '+ano+' no Contas a Pagar, vencimento '+fmtD(data)+'?'))return;
+  call('apiLancarDecimoPLRPagar',[ano,'plr',data],function(res){
+    if(res&&res.success){toast('Lançado: '+brl(res.data.total));loadData(false);}
+    else alert('Erro: '+((res&&res.error)||''));
+  });
+}
+var editPLRFaixaId=null;
+function renderPLRFaixasTable(){
+  var box=el('tblPLRFaixas'); if(!box) return;
+  var faixas=((DATA&&DATA.plrFaixas)||[]).slice().sort(function(a,b){return (parseFloat(a.AnosMin)||0)-(parseFloat(b.AnosMin)||0);});
+  if(!faixas.length){box.innerHTML='<div class="empty">Nenhuma faixa cadastrada ainda.</div>';return;}
+  var h='<table><thead><tr><th>Anos</th><th class="r">Percentual</th><th>Observação</th><th></th></tr></thead><tbody>';
+  faixas.forEach(function(f){
+    var faixaTxt=f.AnosMin+(String(f.AnosMax||'')!==''?(' a '+f.AnosMax):' ou mais')+' ano(s)';
+    h+='<tr><td>'+faixaTxt+'</td><td class="r">'+(f.Percentual||0)+'%</td><td>'+(f.Obs||'')+'</td><td class="c" style="white-space:nowrap"><button class="del" style="color:#364B9B" title="Editar" onclick="editarPLRFaixa(\''+f.ID+'\')">✎</button><button class="del" title="Excluir" onclick="delPLRFaixa(\''+f.ID+'\')">✕</button></td></tr>';
+  });
+  h+='</tbody></table>';
+  box.innerHTML=h;
+}
+function editarPLRFaixa(id){
+  var f=((DATA&&DATA.plrFaixas)||[]).filter(function(x){return String(x.ID)==String(id);})[0]; if(!f)return;
+  editPLRFaixaId=id;
+  el('plr_min').value=f.AnosMin||''; el('plr_max').value=f.AnosMax||''; el('plr_pct').value=f.Percentual||''; el('plr_obs').value=f.Obs||'';
+  el('plr_btn').textContent='Salvar alteração'; el('plr_cancel').style.display='';
+  window.scrollTo(0,document.body.scrollHeight);
+}
+function cancelarPLRFaixa(){
+  editPLRFaixaId=null;
+  ['plr_min','plr_max','plr_pct','plr_obs'].forEach(function(i){if(el(i))el(i).value='';});
+  el('plr_btn').textContent='Adicionar faixa'; el('plr_cancel').style.display='none';
+}
+function salvarPLRFaixa(){
+  var obj={id:editPLRFaixaId, anosMin:val('plr_min'), anosMax:val('plr_max'), percentual:val('plr_pct'), obs:val('plr_obs')};
+  if(obj.anosMin===''||obj.percentual===''){alert('Preencha "Anos a partir de" e o percentual.');return;}
+  call('apiSetPLRFaixa',[obj],function(res){
+    if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
+    cancelarPLRFaixa();
+    loadDataThen(function(){renderDecimoPLR();});
+  });
+}
+function delPLRFaixa(id){
+  if(!confirm('Excluir esta faixa de PLR?'))return;
+  call('apiDeletePLRFaixa',[id],function(res){
+    if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
+    loadDataThen(function(){renderDecimoPLR();});
+  });
+}
+
 function copiarQuadroSalarios(){
   if(!lastFolhaRows.length){alert('Abra a folha do mês primeiro.');return;}
   var mesL=mesLabel(lastFolhaMes);
