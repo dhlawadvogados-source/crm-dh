@@ -1595,11 +1595,25 @@ function apiSetSalarioAjuste(mes, nome, obj){
     return ok_({saved:true});
   }catch(e){ return err_(e.message); }
 }
+// Toda vez que a folha de um mês é lançada no Contas a Pagar, aproveita e já grava o salário/diária BASE
+// (sem reembolso/comissão/passagem) de cada colaborador naquele mês na aba HistoricoSalarial — assim, a partir
+// do momento em que a folha realmente é processada mês a mês (ex.: 2027 em diante), o 13º proporcional já fica
+// correto automaticamente, sem precisar digitar o histórico na mão (isso só é necessário retroativamente, pra meses
+// que já passaram antes dessa automação existir). Nunca quebra o lançamento da folha caso dê algum erro.
+function autoRegistrarHistoricoSalarial_(mes, rows){
+  try{
+    var ano=parseInt(mes.slice(0,4),10); if(!ano) return;
+    var linhas=rows.filter(function(r){ return !ehSocioForaDecimoPLR_(r.nome); })
+      .map(function(r){ return {nome:r.nome, mes:mes, base:r.base}; });
+    if(linhas.length) apiSalvarHistoricoSalarial(ano, linhas);
+  }catch(e){ /* não interrompe o lançamento da folha por causa disso */ }
+}
 function apiLancarFolhaPagar(mes){
   try{
     mes=String(mes||"").slice(0,7); if(!/^\d{4}-\d{2}$/.test(mes)) return err_("Mês inválido.");
     var r=folhaMesRows_(mes); var total=0; r.forEach(function(x){ total+=x.total; }); total=round2_(total);
     if(total<=0) return err_("Folha do mês está zerada.");
+    autoRegistrarHistoricoSalarial_(mes, r);
     var venc=Utilities.formatDate(quintoDiaUtil_(mes), tz_(), "yyyy-MM-dd"); // 5º dia útil (conta sábado)
     var desc="Folha de salários "+mes+" ("+r.length+" colaboradores)";
     var prefixo="Folha de salários "+mes;
@@ -1634,8 +1648,10 @@ function avosNoAno_(dataInicioStr, ano){
 // quando ela tiver o valor daquele mês/pessoa, e caindo para a base vigente em dezembro (cadastro atual) quando não tiver.
 // Isso deixa o 13º "proporcional" de verdade quando houve reajuste no meio do ano (ex.: Igor em setembro/2026).
 // Sócios/pró-labore não entram no 13º/PLR de empregados (têm distribuição de lucros própria, à parte).
-var SOCIOS_FORA_13_PLR = ["mariana"];
-function ehSocioForaDecimoPLR_(nome){ var nk=norm_(nome); return SOCIOS_FORA_13_PLR.some(function(s){ return nk===s || nk.indexOf(s+" ")===0; }); }
+// Prestadores/diaristas que não são funcionários (ex.: limpeza) também ficam de fora do 13º/PLR,
+// mesmo continuando no quadro normal de Salários (são pagos, só não entram nesse benefício).
+var NOMES_FORA_13_PLR = ["mariana","jane"];
+function ehSocioForaDecimoPLR_(nome){ var nk=norm_(nome); return NOMES_FORA_13_PLR.some(function(s){ return nk===s || nk.indexOf(s+" ")===0; }); }
 function decimoTerceiroRows_(ano){
   var hist={};
   objRows_("HistoricoSalarial").forEach(function(h){
