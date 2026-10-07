@@ -45,7 +45,8 @@ var SHEETS = {
   Extrato:       ["ID","Data","Descricao","Valor","Conta","Classe","Categoria","Chave","Obs","Importado"],
   ExtratoRegras: ["ID","Contem","Classe","Categoria","Conta","Ordem"],
   PLRFaixas:     ["ID","AnosMin","AnosMax","Percentual","Obs"],
-  HistoricoSalarial: ["ID","Mes","Nome","Base"]
+  HistoricoSalarial: ["ID","Mes","Nome","Base"],
+  Decimo13PLRAjuste: ["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs"]
 };
 
 // Advogados de referencia. VERSAO WEB: os valores/hora ficam so na aba Advogados da planilha.
@@ -342,7 +343,8 @@ function apiGetAll() {
       extrato: objRows_("Extrato"),
       extratoRegras: objRows_("ExtratoRegras"),
       plrFaixas: objRows_("PLRFaixas"),
-      historicoSalarial: objRows_("HistoricoSalarial")
+      historicoSalarial: objRows_("HistoricoSalarial"),
+      decimo13PLRAjuste: objRows_("Decimo13PLRAjuste")
     };
     d.dash = dashboardFrom_(d);   // dashboard calculado sem reler as abas
     return ok_(d);
@@ -1679,7 +1681,10 @@ function percentualPLR_(anosCompletos, faixas){
   return pct;
 }
 // Linhas da PLR de um ano: tempo de casa em anos completos até 31/dez do ano de referência, x % da tabela PLRFaixas, x base de dezembro.
-function plrRows_(ano){
+// ajustes: mapa norm(nome)->linha de Decimo13PLRAjuste do ano (opcional). Se tiver AnosCasaManual preenchido,
+// usa esse número direto (sem precisar da Data de início) — é o que a tela "dentro de cada funcionário" alimenta.
+function plrRows_(ano, ajustes){
+  ajustes=ajustes||{};
   var faixas=objRows_("PLRFaixas");
   var refDate=new Date(ano,11,31);
   var baseRows=folhaMesRows_(ano+"-12");
@@ -1689,35 +1694,81 @@ function plrRows_(ano){
   cols.forEach(function(c){
     if(norm_(c.Ativo).indexOf("sim")<0 && String(c.Ativo||"")!=="") return;
     if(ehSocioForaDecimoPLR_(c.Nome)) return;
+    var nk=norm_(c.Nome);
+    var base=baseByName[nk]; if(base==null) base=money_(c.SalarioFixo);
+    var ajuste=ajustes[nk];
+    var manualRaw=(ajuste && ajuste.AnosCasaManual!=null)?String(ajuste.AnosCasaManual).trim():"";
+    if(manualRaw!==""){
+      var anosManual=parseFloat(manualRaw.replace(",","."));
+      if(!isNaN(anosManual)){
+        var pctM=percentualPLR_(Math.floor(anosManual), faixas);
+        rows.push({ nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:Math.floor(anosManual), percentual:pctM, base:round2_(base), valor:round2_(base*pctM/100), manual:true });
+        return;
+      }
+    }
     var m=String(c.DataInicio||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if(!m) { rows.push({nome:c.Nome, dataInicio:"", anos:0, percentual:0, base:(baseByName[norm_(c.Nome)]||money_(c.SalarioFixo)), valor:0, semData:true}); return; }
+    if(!m) { rows.push({nome:c.Nome, dataInicio:"", anos:0, percentual:0, base:round2_(base), valor:0, semData:true}); return; }
     var ini=new Date(parseInt(m[1],10),parseInt(m[2],10)-1,parseInt(m[3],10));
-    if(ini>refDate) return; // ainda não tinha entrado até 31/dez daquele ano
+    if(ini>refDate) { rows.push({nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:0, percentual:0, base:round2_(base), valor:0, aindaNaoEntrou:true}); return; } // ainda não tinha entrado até 31/dez daquele ano
     var anos=Math.floor((refDate-ini)/(1000*60*60*24*365.25));
     var pct=percentualPLR_(anos, faixas);
-    var base=baseByName[norm_(c.Nome)]; if(base==null) base=money_(c.SalarioFixo);
     var valor=round2_(base*pct/100);
     rows.push({ nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:anos, percentual:pct, base:round2_(base), valor:valor });
   });
   return rows;
 }
+// Linhas finais do 13º+PLR de um ano: soma os dois cálculos e abate eventual adiantamento do 13º
+// (lançado dentro do próprio colaborador) primeiro da 2ª parcela e, se sobrar, da 1ª.
 function apiDecimoPLR(ano){
   try{
     ano=parseInt(ano,10); if(!ano) return err_("Ano inválido.");
+    var ajustes={};
+    objRows_("Decimo13PLRAjuste").forEach(function(a){ if(parseInt(a.Ano,10)===ano) ajustes[norm_(a.Nome)]=a; });
     var d13=decimoTerceiroRows_(ano);
-    var plr=plrRows_(ano);
+    var plr=plrRows_(ano, ajustes);
     var plrByName={}; plr.forEach(function(p){ plrByName[norm_(p.nome)]=p; });
     var rows=d13.map(function(r){
-      var p=plrByName[norm_(r.nome)]||{anos:0,percentual:0,valor:0,semData:false};
-      return { nome:r.nome, base:r.base, avos:r.avos, integral13:r.integral, parcela1:r.parcela1, parcela2:r.parcela2,
-        anosCasa:p.anos||0, percentualPLR:p.percentual||0, valorPLR:p.valor||0, semDataInicio:!!p.semData,
+      var nk=norm_(r.nome);
+      var p=plrByName[nk]||{anos:0,percentual:0,valor:0,semData:false,manual:false};
+      var ajuste=ajustes[nk];
+      var adiant=money_(ajuste?ajuste.Adiantamento13:0);
+      var p2aj=round2_(Math.max(0, r.parcela2-adiant));
+      var sobra=Math.max(0, adiant-r.parcela2);
+      var p1aj=round2_(Math.max(0, r.parcela1-sobra));
+      return { nome:r.nome, base:r.base, avos:r.avos, integral13:r.integral,
+        parcela1Bruta:r.parcela1, parcela2Bruta:r.parcela2, adiantamento13:round2_(adiant), adiantamento13Obs:String(ajuste?(ajuste.Adiantamento13Obs||""):""),
+        parcela1:p1aj, parcela2:p2aj,
+        anosCasa:p.anos||0, percentualPLR:p.percentual||0, valorPLR:p.valor||0, semDataInicio:!!p.semData, anosCasaManual:!!p.manual,
         detalhesMeses:r.detalhesMeses||[], temHistorico:!!r.temHistorico,
-        total: round2_((r.integral||0)+(p.valor||0)) };
+        total: round2_(p1aj+p2aj+(p.valor||0)) };
     });
-    var totais={integral13:0,parcela1:0,parcela2:0,plr:0,geral:0};
-    rows.forEach(function(r){ totais.integral13+=r.integral13; totais.parcela1+=r.parcela1; totais.parcela2+=r.parcela2; totais.plr+=r.valorPLR; totais.geral+=r.total; });
+    var totais={integral13:0,parcela1:0,parcela2:0,adiantamento:0,plr:0,geral:0};
+    rows.forEach(function(r){ totais.integral13+=r.integral13; totais.parcela1+=r.parcela1; totais.parcela2+=r.parcela2; totais.adiantamento+=r.adiantamento13; totais.plr+=r.valorPLR; totais.geral+=r.total; });
     Object.keys(totais).forEach(function(k){ totais[k]=round2_(totais[k]); });
-    return ok_({ano:ano, rows:rows, totais:totais, faixas:objRows_("PLRFaixas")});
+    return ok_({ano:ano, rows:rows, totais:totais});
+  }catch(e){ return err_(e.message); }
+}
+// Salva, por colaborador+ano, o tempo de casa manual (pra PLR) e/ou o adiantamento do 13º — tudo "dentro do funcionário".
+function apiSetDecimo13PLRAjuste(ano, nome, obj){
+  try{
+    ano=parseInt(ano,10); nome=String(nome||"").trim(); obj=obj||{};
+    if(!ano) return err_("Ano inválido."); if(!nome) return err_("Nome inválido.");
+    var sh=getDb_().getSheetByName("Decimo13PLRAjuste");
+    var head0=sh.getRange(1,1,1,Math.max(1,sh.getLastColumn())).getValues()[0];
+    var precisa=["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs"];
+    var faltam=precisa.filter(function(c){ return head0.indexOf(c)<0; });
+    if(faltam.length){ sh.getRange(1,head0.length+1,1,faltam.length).setValues([faltam]); }
+    var vals=sh.getDataRange().getValues(); var head=vals[0];
+    var ci={}; head.forEach(function(h,i){ ci[h]=i; });
+    var lin=-1; for(var i=1;i<vals.length;i++){ if(parseInt(vals[i][ci.Ano],10)===ano && norm_(vals[i][ci.Nome])===norm_(nome)){ lin=i; break; } }
+    var row=(lin>=0)?vals[lin].slice():head.map(function(){return "";});
+    if("AnosCasaManual" in obj && ci.AnosCasaManual!=null) row[ci.AnosCasaManual]=obj.AnosCasaManual;
+    if("Adiantamento13" in obj && ci.Adiantamento13!=null) row[ci.Adiantamento13]=obj.Adiantamento13;
+    if("Adiantamento13Obs" in obj && ci.Adiantamento13Obs!=null) row[ci.Adiantamento13Obs]=obj.Adiantamento13Obs;
+    row[ci.Ano]=ano; row[ci.Nome]=nome;
+    if(ci.ID!=null && !row[ci.ID]) row[ci.ID]=newId_();
+    if(lin>=0) sh.getRange(lin+1,1,1,row.length).setValues([row]); else sh.appendRow(row);
+    return ok_({saved:true});
   }catch(e){ return err_(e.message); }
 }
 function apiSetPLRFaixa(obj){
