@@ -46,7 +46,7 @@ var SHEETS = {
   ExtratoRegras: ["ID","Contem","Classe","Categoria","Conta","Ordem"],
   PLRFaixas:     ["ID","AnosMin","AnosMax","Percentual","Obs"],
   HistoricoSalarial: ["ID","Mes","Nome","Base"],
-  Decimo13PLRAjuste: ["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs"]
+  Decimo13PLRAjuste: ["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs","ValorPLRManual","PLRParcela1Manual"]
 };
 
 // Advogados de referencia. VERSAO WEB: os valores/hora ficam so na aba Advogados da planilha.
@@ -1713,23 +1713,37 @@ function plrRows_(ano, ajustes){
     var nk=norm_(c.Nome);
     var base=baseByName[nk]; if(base==null) base=money_(c.SalarioFixo);
     var ajuste=ajustes[nk];
+    var row=null;
     var manualRaw=(ajuste && ajuste.AnosCasaManual!=null)?String(ajuste.AnosCasaManual).trim():"";
     if(manualRaw!==""){
       var anosManual=parseFloat(manualRaw.replace(",","."));
       if(!isNaN(anosManual)){
         var pctM=percentualPLR_(Math.floor(anosManual), faixas);
-        rows.push({ nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:Math.floor(anosManual), percentual:pctM, base:round2_(base), valor:round2_(base*pctM/100), manual:true });
-        return;
+        row={ nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:Math.floor(anosManual), percentual:pctM, base:round2_(base), valor:round2_(base*pctM/100), manual:true };
       }
     }
-    var m=String(c.DataInicio||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
-    if(!m) { rows.push({nome:c.Nome, dataInicio:"", anos:0, percentual:0, base:round2_(base), valor:0, semData:true}); return; }
-    var ini=new Date(parseInt(m[1],10),parseInt(m[2],10)-1,parseInt(m[3],10));
-    if(ini>refDate) { rows.push({nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:0, percentual:0, base:round2_(base), valor:0, aindaNaoEntrou:true}); return; } // ainda não tinha entrado até 31/dez daquele ano
-    var anos=Math.floor((refDate-ini)/(1000*60*60*24*365.25));
-    var pct=percentualPLR_(anos, faixas);
-    var valor=round2_(base*pct/100);
-    rows.push({ nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:anos, percentual:pct, base:round2_(base), valor:valor });
+    if(!row){
+      var m=String(c.DataInicio||"").match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(!m) { row={nome:c.Nome, dataInicio:"", anos:0, percentual:0, base:round2_(base), valor:0, semData:true}; }
+      else {
+        var ini=new Date(parseInt(m[1],10),parseInt(m[2],10)-1,parseInt(m[3],10));
+        if(ini>refDate) { row={nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:0, percentual:0, base:round2_(base), valor:0, aindaNaoEntrou:true}; } // ainda não tinha entrado até 31/dez daquele ano
+        else {
+          var anos=Math.floor((refDate-ini)/(1000*60*60*24*365.25));
+          var pct=percentualPLR_(anos, faixas);
+          row={ nome:c.Nome, dataInicio:String(c.DataInicio||""), anos:anos, percentual:pct, base:round2_(base), valor:round2_(base*pct/100) };
+        }
+      }
+    }
+    // Override manual do VALOR final da PLR: "a gente paga do jeito que a gente quiser" — ignora a regra geral
+    // pra essa pessoa específica, mas continua mostrando os anos de casa/percentual calculados como referência.
+    var valorManualRaw=(ajuste && ajuste.ValorPLRManual!=null)?String(ajuste.ValorPLRManual).trim():"";
+    if(valorManualRaw!==""){
+      var valorManualN=money_(valorManualRaw);
+      row.valor=round2_(valorManualN);
+      row.valorManual=true;
+    }
+    rows.push(row);
   });
   return rows;
 }
@@ -1755,6 +1769,7 @@ function apiDecimoPLR(ano){
         parcela1Bruta:r.parcela1, parcela2Bruta:r.parcela2, adiantamento13:round2_(adiant), adiantamento13Obs:String(ajuste?(ajuste.Adiantamento13Obs||""):""),
         parcela1:p1aj, parcela2:p2aj,
         anosCasa:p.anos||0, percentualPLR:p.percentual||0, valorPLR:p.valor||0, semDataInicio:!!p.semData, anosCasaManual:!!p.manual,
+        valorPLRManual:!!p.valorManual, plrParcela1Manual:String(ajuste?(ajuste.PLRParcela1Manual!=null?ajuste.PLRParcela1Manual:""):""),
         detalhesMeses:r.detalhesMeses||[], temHistorico:!!r.temHistorico,
         total: round2_(p1aj+p2aj+(p.valor||0)) };
     });
@@ -1771,7 +1786,7 @@ function apiSetDecimo13PLRAjuste(ano, nome, obj){
     if(!ano) return err_("Ano inválido."); if(!nome) return err_("Nome inválido.");
     var sh=getDb_().getSheetByName("Decimo13PLRAjuste");
     var head0=sh.getRange(1,1,1,Math.max(1,sh.getLastColumn())).getValues()[0];
-    var precisa=["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs"];
+    var precisa=["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs","ValorPLRManual","PLRParcela1Manual"];
     var faltam=precisa.filter(function(c){ return head0.indexOf(c)<0; });
     if(faltam.length){ sh.getRange(1,head0.length+1,1,faltam.length).setValues([faltam]); }
     var vals=sh.getDataRange().getValues(); var head=vals[0];
@@ -1781,6 +1796,8 @@ function apiSetDecimo13PLRAjuste(ano, nome, obj){
     if("AnosCasaManual" in obj && ci.AnosCasaManual!=null) row[ci.AnosCasaManual]=obj.AnosCasaManual;
     if("Adiantamento13" in obj && ci.Adiantamento13!=null) row[ci.Adiantamento13]=obj.Adiantamento13;
     if("Adiantamento13Obs" in obj && ci.Adiantamento13Obs!=null) row[ci.Adiantamento13Obs]=obj.Adiantamento13Obs;
+    if("ValorPLRManual" in obj && ci.ValorPLRManual!=null) row[ci.ValorPLRManual]=obj.ValorPLRManual;
+    if("PLRParcela1Manual" in obj && ci.PLRParcela1Manual!=null) row[ci.PLRParcela1Manual]=obj.PLRParcela1Manual;
     row[ci.Ano]=ano; row[ci.Nome]=nome;
     if(ci.ID!=null && !row[ci.ID]) row[ci.ID]=newId_();
     if(lin>=0) sh.getRange(lin+1,1,1,row.length).setValues([row]); else sh.appendRow(row);
@@ -1842,11 +1859,21 @@ function apiLancarDecimoPLRPagar(ano, tipo, dataVenc, percentual1){
     else if(tipo==="parcela2"){ total=res.data.totais.parcela2; desc="13º salário (2ª parcela) "+ano; descBase=desc; if(!dataVenc) dataVenc=ano+"-12-20"; }
     else if(tipo==="plr"){ total=res.data.totais.plr; desc="Participação nos lucros (PLR) "+ano; descBase=desc; }
     else if(tipo==="plr1" || tipo==="plr2"){
-      var pct1=Number(percentual1); if(isNaN(pct1)||pct1<0||pct1>100) pct1=50;
-      var pctUsado=(tipo==="plr1")?pct1:round2_(100-pct1);
+      // Cada colaborador pode ter sua própria divisão (PLRParcela1Manual, lançada dentro do funcionário);
+      // quem não tiver nada lançado usa o % padrão informado na tela (percentual1, default 50/50).
+      var pctPadrao=Number(percentual1); if(isNaN(pctPadrao)||pctPadrao<0||pctPadrao>100) pctPadrao=50;
+      var somaP1=0, somaP2=0;
+      (res.data.rows||[]).forEach(function(r){
+        var p1;
+        var manualRaw=String(r.plrParcela1Manual||"").trim();
+        if(manualRaw!==""){ p1=round2_(Math.max(0, Math.min(money_(manualRaw), r.valorPLR))); }
+        else { p1=round2_(r.valorPLR*pctPadrao/100); }
+        var p2=round2_(r.valorPLR-p1);
+        somaP1+=p1; somaP2+=p2;
+      });
+      total=(tipo==="plr1")?round2_(somaP1):round2_(somaP2);
       descBase="Participação nos lucros (PLR) ("+(tipo==="plr1"?"1ª":"2ª")+" parcela) "+ano;
-      desc=descBase+" — "+pctUsado+"% do total";
-      total=round2_(res.data.totais.plr*pctUsado/100);
+      desc=descBase+" — soma individual de cada colaborador";
     }
     else return err_("Tipo inválido.");
     if(!dataVenc) return err_("Informe a data de pagamento.");

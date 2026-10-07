@@ -311,6 +311,24 @@ input.rvenc:focus{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px 
           <button class="btn" style="background:#2f8f5b" onclick="dpLancarPLR(2)">Lançar 2ª parcela PLR</button>
         </div>
       </div>
+      <div class="card" id="cardRegraBonus">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">
+          <b>REGRA PARA BÔNUS (PLR)</b>
+          <button class="btn" style="background:#8791a1" onclick="toggleRegraBonusEdit()">✏️ Editar regra</button>
+        </div>
+        <div id="regraBonusResumo" style="margin-top:6px"></div>
+        <div id="regraBonusEdit" style="display:none;margin-top:10px">
+          <div class="form" style="grid-template-columns:repeat(4,1fr)">
+            <div><label>Anos a partir de</label><input id="plr_min" type="text" placeholder="ex.: 0"></div>
+            <div><label>Anos até (vazio = sem limite)</label><input id="plr_max" type="text" placeholder="ex.: 1"></div>
+            <div><label>Percentual (%)</label><input id="plr_pct" type="text" placeholder="ex.: 25"></div>
+            <div><label>Observação</label><input id="plr_obs" type="text" placeholder="opcional"></div>
+          </div>
+          <button class="btn" id="plr_btn" onclick="salvarPLRFaixa()">Adicionar faixa</button>
+          <button class="btn" id="plr_cancel" style="display:none;background:#8791a1" onclick="cancelarPLRFaixa()">Cancelar</button>
+          <div class="scroll" id="tblPLRFaixas" style="margin-top:12px"></div>
+        </div>
+      </div>
       <div class="card"><div class="scroll" id="tblDecimoPLR"></div></div>
     </section>
 
@@ -1311,6 +1329,7 @@ function fillDpAnos(){
 var lastDecimoPLRRows=[], lastDecimoPLRAno='';
 function renderDecimoPLR(){
   fillDpAnos();
+  renderRegraBonusResumo();
   var ano=el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear());
   var box=el('tblDecimoPLR'); if(!box) return;
   box.innerHTML='<div class="empty">Calculando...</div>';
@@ -1325,7 +1344,7 @@ function renderDecimoPLR(){
       h+='<tr><td><a href="javascript:void(0)" onclick="abrirDecimoPLRColab(\''+escJs(r.nome)+'\')" style="color:#364B9B;font-weight:600;text-decoration:none">'+r.nome+(r.temHistorico?' <span class="miuda" title="tem meses com salário diferente do atual">✓ hist.</span>':'')+(r.adiantamento13>0?' <span class="miuda" style="color:#D4561C" title="'+parcTip+'">✓ adiant.</span>':'')+'</a>'+(r.semDataInicio?' <span class="miuda" style="color:#b23a48">(sem tempo de casa)</span>':'')+'</td>'+
          '<td class="r">'+brl(r.base)+'</td><td class="c">'+r.avos+'/12</td><td class="r">'+brl(r.integral13)+'</td>'+
          '<td class="r" title="'+parcTip+'">'+brl(r.parcela1)+'</td><td class="r" title="'+parcTip+'">'+brl(r.parcela2)+'</td>'+
-         '<td class="c">'+r.anosCasa+(r.anosCasaManual?' <span class="miuda" title="lançado manualmente">✎</span>':'')+'</td><td class="c">'+r.percentualPLR+'%</td><td class="r">'+brl(r.valorPLR)+'</td>'+
+         '<td class="c">'+r.anosCasa+(r.anosCasaManual?' <span class="miuda" title="lançado manualmente">✎</span>':'')+'</td><td class="c">'+r.percentualPLR+'%</td><td class="r">'+brl(r.valorPLR)+(r.valorPLRManual?' <span class="miuda" title="valor lançado manualmente, fora da regra">✎</span>':'')+'</td>'+
          '<td class="r"><b>'+brl(r.total)+'</b></td></tr>';
     });
     h+='<tr style="font-weight:700;background:#FFF4EE"><td>TOTAL</td><td></td><td></td><td class="r">'+brl(d.totais.integral13)+'</td><td class="r">'+brl(d.totais.parcela1)+'</td><td class="r">'+brl(d.totais.parcela2)+'</td><td></td><td></td><td class="r">'+brl(d.totais.plr)+'</td><td class="r">'+brl(d.totais.geral)+'</td></tr>';
@@ -1380,20 +1399,15 @@ function renderDecimoPLRModal(){
     h+='<div class="miuda" style="margin:0">Avos 13º: '+row.avos+'/12 &nbsp;·&nbsp; 13º integral: '+brl(row.integral13)+(row.adiantamento13>0?(' &nbsp;·&nbsp; Adiantado: '+brl(row.adiantamento13)):'')+' &nbsp;·&nbsp; A pagar: 1ª '+brl(row.parcela1)+' + 2ª '+brl(row.parcela2)+' &nbsp;·&nbsp; PLR: '+brl(row.valorPLR)+' &nbsp;·&nbsp; <b>Total: '+brl(row.total)+'</b></div>';
   }
 
-  h+='<div class="msec" style="margin-top:18px">Faixas da PLR por tempo de casa</div>';
-  h+='<div class="form" style="grid-template-columns:repeat(4,1fr)">'+
-     '<div><label>Anos a partir de</label><input id="plr_min" type="text" placeholder="ex.: 0"></div>'+
-     '<div><label>Anos até (vazio = sem limite)</label><input id="plr_max" type="text" placeholder="ex.: 1"></div>'+
-     '<div><label>Percentual (%)</label><input id="plr_pct" type="text" placeholder="ex.: 25"></div>'+
-     '<div><label>Observação</label><input id="plr_obs" type="text" placeholder="opcional"></div>'+
+  h+='<div class="msec" style="margin-top:18px">PLR de '+nome+' — valor e divisão (fora da regra geral)</div>';
+  h+='<div class="mgrid" style="grid-template-columns:1fr 1fr">'+
+     '<div class="mfield"><div class="ml">Valor da PLR (R$)</div><input id="dp_plr_valor_manual" type="text" inputmode="decimal" placeholder="0,00" value="'+(ajuste.ValorPLRManual!=null&&Number(ajuste.ValorPLRManual)?String(ajuste.ValorPLRManual).replace('.',','):'')+'"></div>'+
+     '<div class="mfield"><div class="ml">1ª parcela da PLR (R$)</div><input id="dp_plr_p1_manual" type="text" inputmode="decimal" placeholder="0,00" value="'+(ajuste.PLRParcela1Manual!=null&&Number(ajuste.PLRParcela1Manual)?String(ajuste.PLRParcela1Manual).replace('.',','):'')+'"></div>'+
      '</div>'+
-     '<button class="btn" id="plr_btn" onclick="salvarPLRFaixa()">Adicionar faixa</button>'+
-     '<button class="btn" id="plr_cancel" style="display:none;background:#8791a1" onclick="cancelarPLRFaixa()">Cancelar</button>'+
-     '<div class="scroll" id="tblPLRFaixas" style="margin-top:12px"></div>';
+     '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn" style="background:#2f8f5b" onclick="salvarPLRManual()">💾 Salvar</button><button class="btn" style="background:#8791a1" onclick="limparPLRManual()">🗑️ Limpar</button></div>';
 
   h+='</div><div class="mfoot"><button class="btn" style="background:#e9ecf2;color:#364B9B" onclick="closeModal()">Fechar</button></div>';
   el('modalCard').innerHTML=h;
-  renderPLRFaixasTable();
 }
 function salvarAnosCasaManual(){
   var nome=dpModalNome; if(!nome) return;
@@ -1423,6 +1437,21 @@ function limparAdiantamento13(){
   if(el('dp_adiant_valor')) el('dp_adiant_valor').value='';
   if(el('dp_adiant_obs')) el('dp_adiant_obs').value='';
   salvarAdiantamento13();
+}
+function salvarPLRManual(){
+  var nome=dpModalNome; if(!nome) return;
+  var ano=lastDecimoPLRAno||(el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear()));
+  var valor=val('dp_plr_valor_manual'), p1=val('dp_plr_p1_manual');
+  call('apiSetDecimo13PLRAjuste',[ano,nome,{ValorPLRManual:valor,PLRParcela1Manual:p1}],function(res){
+    if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
+    toast('PLR salva.');
+    loadDataThen(function(){renderDecimoPLR();renderDecimoPLRModal();});
+  });
+}
+function limparPLRManual(){
+  if(el('dp_plr_valor_manual')) el('dp_plr_valor_manual').value='';
+  if(el('dp_plr_p1_manual')) el('dp_plr_p1_manual').value='';
+  salvarPLRManual();
 }
 function salvarHistoricoSalarialColab(){
   var nome=dpModalNome; if(!nome) return;
@@ -1459,6 +1488,21 @@ function dpLancarPLR(parcela){
   });
 }
 function round2_(n){return Math.round((Number(n)||0)*100)/100;}
+function toggleRegraBonusEdit(){
+  var box=el('regraBonusEdit'); if(!box) return;
+  var abrir=box.style.display==='none';
+  box.style.display=abrir?'':'none';
+  if(abrir) renderPLRFaixasTable();
+}
+function renderRegraBonusResumo(){
+  var box=el('regraBonusResumo'); if(!box) return;
+  var faixas=((DATA&&DATA.plrFaixas)||[]).slice().sort(function(a,b){return (parseFloat(a.AnosMin)||0)-(parseFloat(b.AnosMin)||0);});
+  if(!faixas.length){box.innerHTML='<span class="miuda">Nenhuma faixa cadastrada ainda.</span>';return;}
+  box.innerHTML=faixas.map(function(f){
+    var faixaTxt=f.AnosMin+(String(f.AnosMax||'')!==''?(' a '+f.AnosMax):'+')+' ano(s)';
+    return '<span class="tag gold" style="margin:2px 4px 2px 0">'+faixaTxt+': '+(f.Percentual||0)+'%</span>';
+  }).join('');
+}
 var editPLRFaixaId=null;
 function renderPLRFaixasTable(){
   var box=el('tblPLRFaixas'); if(!box) return;
@@ -1477,7 +1521,6 @@ function editarPLRFaixa(id){
   editPLRFaixaId=id;
   el('plr_min').value=f.AnosMin||''; el('plr_max').value=f.AnosMax||''; el('plr_pct').value=f.Percentual||''; el('plr_obs').value=f.Obs||'';
   el('plr_btn').textContent='Salvar alteração'; el('plr_cancel').style.display='';
-  if(el('modalBg')) el('modalBg').scrollTop=el('modalBg').scrollHeight;
 }
 function cancelarPLRFaixa(){
   editPLRFaixaId=null;
@@ -1490,14 +1533,14 @@ function salvarPLRFaixa(){
   call('apiSetPLRFaixa',[obj],function(res){
     if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
     cancelarPLRFaixa();
-    loadDataThen(function(){renderDecimoPLR();if(dpModalNome)renderDecimoPLRModal();});
+    loadDataThen(function(){renderDecimoPLR();renderRegraBonusResumo();renderPLRFaixasTable();if(dpModalNome)renderDecimoPLRModal();});
   });
 }
 function delPLRFaixa(id){
   if(!confirm('Excluir esta faixa de PLR?'))return;
   call('apiDeletePLRFaixa',[id],function(res){
     if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
-    loadDataThen(function(){renderDecimoPLR();if(dpModalNome)renderDecimoPLRModal();});
+    loadDataThen(function(){renderDecimoPLR();renderRegraBonusResumo();renderPLRFaixasTable();if(dpModalNome)renderDecimoPLRModal();});
   });
 }
 
