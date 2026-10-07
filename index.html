@@ -1385,11 +1385,12 @@ function renderDecimoPLRModal(){
      '</div>'+
      '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn" style="background:#2f8f5b" onclick="salvarAdiantamento13()">💾 Salvar adiantamento</button><button class="btn" style="background:#8791a1" onclick="limparAdiantamento13()">🗑️ Limpar</button></div>';
 
-  h+='<div class="msec" style="margin-top:18px">13º de '+nome+' — divisão das parcelas (já descontado o adiantamento)</div>';
+  h+='<div class="msec" style="margin-top:18px">13º de '+nome+' — divisão das parcelas (já descontado o adiantamento'+(row?(': total líquido '+brl(row.parcela1+row.parcela2)):'')+')</div>';
   h+='<div class="mgrid" style="grid-template-columns:1fr 1fr">'+
      '<div class="mfield"><div class="ml">1ª parcela do 13º (R$)</div><input id="dp_13_p1_manual" type="text" inputmode="decimal" placeholder="0,00" value="'+(ajuste.Parcela13_1Manual!=null&&Number(ajuste.Parcela13_1Manual)?String(ajuste.Parcela13_1Manual).replace('.',','):'')+'"></div>'+
-     (row?('<div class="mfield"><div class="ml">2ª parcela (calculada)</div><input type="text" disabled value="'+brl(row.parcela2)+'"></div>'):'<div></div>')+
+     '<div class="mfield"><div class="ml">2ª parcela do 13º (R$)</div><input id="dp_13_p2_manual" type="text" inputmode="decimal" placeholder="0,00" value="'+(ajuste.Parcela13_2Manual!=null&&Number(ajuste.Parcela13_2Manual)?String(ajuste.Parcela13_2Manual).replace('.',','):'')+'"></div>'+
      '</div>'+
+     '<div class="miuda" style="margin:4px 0 0">Preencha só uma (a outra completa o total líquido sozinha) ou as duas (aí usa exatamente o que você digitar). Em branco = divide o líquido igual nas duas.</div>'+
      '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn" style="background:#2f8f5b" onclick="salvar13Manual()">💾 Salvar</button><button class="btn" style="background:#8791a1" onclick="limpar13Manual()">🗑️ Limpar</button></div>';
 
   h+='<div class="msec" style="margin-top:18px">Salário/diária de '+ano+', mês a mês (pra corrigir o 13º)</div>';
@@ -1445,8 +1446,8 @@ function limparAdiantamento13(){
 function salvar13Manual(){
   var nome=dpModalNome; if(!nome) return;
   var ano=lastDecimoPLRAno||(el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear()));
-  var p1=val('dp_13_p1_manual');
-  call('apiSetDecimo13PLRAjuste',[ano,nome,{Parcela13_1Manual:p1}],function(res){
+  var p1=val('dp_13_p1_manual'), p2=val('dp_13_p2_manual');
+  call('apiSetDecimo13PLRAjuste',[ano,nome,{Parcela13_1Manual:p1,Parcela13_2Manual:p2}],function(res){
     if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
     toast('Divisão do 13º salva.');
     loadDataThen(function(){renderDecimoPLR();renderDecimoPLRModal();});
@@ -1454,6 +1455,7 @@ function salvar13Manual(){
 }
 function limpar13Manual(){
   if(el('dp_13_p1_manual')) el('dp_13_p1_manual').value='';
+  if(el('dp_13_p2_manual')) el('dp_13_p2_manual').value='';
   salvar13Manual();
 }
 function salvarPLRManual(){
