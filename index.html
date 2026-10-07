@@ -306,9 +306,7 @@ input.rvenc:focus{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px 
         </div>
         <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:10px">
           <input id="dp_plr_data" type="date" class="mini" style="width:140px">
-          <span style="display:inline-flex;gap:4px;align-items:center"><input id="dp_plr_pct" type="text" inputmode="decimal" class="mini" style="width:50px;text-align:center" value="50">% na 1ª parcela</span>
-          <button class="btn" style="background:#2f8f5b" onclick="dpLancarPLR(1)">Lançar 1ª parcela PLR</button>
-          <button class="btn" style="background:#2f8f5b" onclick="dpLancarPLR(2)">Lançar 2ª parcela PLR</button>
+          <button class="btn" style="background:#2f8f5b" onclick="dpLancarPLR()">Lançar PLR (Contas a Pagar) — parcela única</button>
         </div>
       </div>
       <div class="card" id="cardRegraBonus">
@@ -1406,12 +1404,11 @@ function renderDecimoPLRModal(){
     h+='<div class="miuda" style="margin:0">Avos 13º: '+row.avos+'/12 &nbsp;·&nbsp; 13º integral: '+brl(row.integral13)+(row.adiantamento13>0?(' &nbsp;·&nbsp; Adiantado: '+brl(row.adiantamento13)):'')+' &nbsp;·&nbsp; A pagar: 1ª '+brl(row.parcela1)+' + 2ª '+brl(row.parcela2)+' &nbsp;·&nbsp; PLR: '+brl(row.valorPLR)+' &nbsp;·&nbsp; <b>Total: '+brl(row.total)+'</b></div>';
   }
 
-  h+='<div class="msec" style="margin-top:18px">PLR de '+nome+' — valor e divisão (fora da regra geral)</div>';
+  h+='<div class="msec" style="margin-top:18px">PLR de '+nome+' — valor (fora da regra geral, paga em parcela única)</div>';
   h+='<div class="mgrid" style="grid-template-columns:1fr 1fr">'+
      '<div class="mfield"><div class="ml">Valor da PLR (R$)</div><input id="dp_plr_valor_manual" type="text" inputmode="decimal" placeholder="0,00" value="'+(ajuste.ValorPLRManual!=null&&Number(ajuste.ValorPLRManual)?String(ajuste.ValorPLRManual).replace('.',','):'')+'"></div>'+
-     '<div class="mfield"><div class="ml">1ª parcela da PLR (R$)</div><input id="dp_plr_p1_manual" type="text" inputmode="decimal" placeholder="0,00" value="'+(ajuste.PLRParcela1Manual!=null&&Number(ajuste.PLRParcela1Manual)?String(ajuste.PLRParcela1Manual).replace('.',','):'')+'"></div>'+
-     '</div>'+
-     '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn" style="background:#2f8f5b" onclick="salvarPLRManual()">💾 Salvar</button><button class="btn" style="background:#8791a1" onclick="limparPLRManual()">🗑️ Limpar</button></div>';
+     '<div style="display:flex;align-items:flex-end;gap:6px"><button class="btn" style="background:#2f8f5b" onclick="salvarPLRManual()">💾 Salvar</button><button class="btn" style="background:#8791a1" onclick="limparPLRManual()">🗑️ Limpar</button></div>'+
+     '</div>';
 
   h+='</div><div class="mfoot"><button class="btn" style="background:#e9ecf2;color:#364B9B" onclick="closeModal()">Fechar</button></div>';
   el('modalCard').innerHTML=h;
@@ -1462,8 +1459,8 @@ function limpar13Manual(){
 function salvarPLRManual(){
   var nome=dpModalNome; if(!nome) return;
   var ano=lastDecimoPLRAno||(el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear()));
-  var valor=val('dp_plr_valor_manual'), p1=val('dp_plr_p1_manual');
-  call('apiSetDecimo13PLRAjuste',[ano,nome,{ValorPLRManual:valor,PLRParcela1Manual:p1}],function(res){
+  var valor=val('dp_plr_valor_manual');
+  call('apiSetDecimo13PLRAjuste',[ano,nome,{ValorPLRManual:valor}],function(res){
     if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
     toast('PLR salva.');
     loadDataThen(function(){renderDecimoPLR();renderDecimoPLRModal();});
@@ -1471,7 +1468,6 @@ function salvarPLRManual(){
 }
 function limparPLRManual(){
   if(el('dp_plr_valor_manual')) el('dp_plr_valor_manual').value='';
-  if(el('dp_plr_p1_manual')) el('dp_plr_p1_manual').value='';
   salvarPLRManual();
 }
 function salvarHistoricoSalarialColab(){
@@ -1494,16 +1490,12 @@ function dpLancar(tipo){
     else alert('Erro: '+((res&&res.error)||''));
   });
 }
-function dpLancarPLR(parcela){
+function dpLancarPLR(){
   var ano=el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear());
   var data=val('dp_plr_data');
   if(!data){alert('Informe a data de pagamento da PLR.');return;}
-  var pct=parseFloat(String(val('dp_plr_pct')||'50').replace(',','.')); if(isNaN(pct)||pct<0||pct>100) pct=50;
-  var tipo=parcela===1?'plr1':'plr2';
-  var pctEfetivo=parcela===1?pct:round2_(100-pct);
-  var label=(parcela===1?'1ª':'2ª')+' parcela da PLR ('+pctEfetivo+'% do total)';
-  if(!confirm('Lançar a '+label+' de '+ano+' no Contas a Pagar, vencimento '+fmtD(data)+'?'))return;
-  call('apiLancarDecimoPLRPagar',[ano,tipo,data,pct],function(res){
+  if(!confirm('Lançar a PLR de '+ano+' no Contas a Pagar, vencimento '+fmtD(data)+'?'))return;
+  call('apiLancarDecimoPLRPagar',[ano,'plr',data],function(res){
     if(res&&res.success){toast('Lançado: '+brl(res.data.total));loadData(false);}
     else alert('Erro: '+((res&&res.error)||''));
   });
