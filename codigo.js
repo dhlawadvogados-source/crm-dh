@@ -1831,18 +1831,27 @@ function apiSalvarHistoricoSalarial(ano, linhas){
 }
 // Lança no Contas a Pagar o total de uma parcela (13º 1ª/2ª) ou da PLR de um ano, somando todos os colaboradores num único lançamento.
 // Atualiza o lançamento existente (evita duplicar) se já tiver sido lançado antes para o mesmo ano/tipo.
-function apiLancarDecimoPLRPagar(ano, tipo, dataVenc){
+// tipo: "parcela1"/"parcela2" (13º, 50/50 automático) ou "plr1"/"plr2" (PLR, dividida no % que a Daphyni escolher em
+// percentual1 — ex.: 60 significa 60% na 1ª parcela e 40% na 2ª) ou "plr" (PLR inteira, de uma vez só — mantido por compatibilidade).
+function apiLancarDecimoPLRPagar(ano, tipo, dataVenc, percentual1){
   try{
     ano=parseInt(ano,10); if(!ano) return err_("Ano inválido.");
     var res=apiDecimoPLR(ano); if(!res.success) return res;
-    var total=0, desc="";
-    if(tipo==="parcela1"){ total=res.data.totais.parcela1; desc="13º salário (1ª parcela) "+ano; if(!dataVenc) dataVenc=ano+"-11-30"; }
-    else if(tipo==="parcela2"){ total=res.data.totais.parcela2; desc="13º salário (2ª parcela) "+ano; if(!dataVenc) dataVenc=ano+"-12-20"; }
-    else if(tipo==="plr"){ total=res.data.totais.plr; desc="Participação nos lucros (PLR) "+ano; }
+    var total=0, desc="", descBase="";
+    if(tipo==="parcela1"){ total=res.data.totais.parcela1; desc="13º salário (1ª parcela) "+ano; descBase=desc; if(!dataVenc) dataVenc=ano+"-11-30"; }
+    else if(tipo==="parcela2"){ total=res.data.totais.parcela2; desc="13º salário (2ª parcela) "+ano; descBase=desc; if(!dataVenc) dataVenc=ano+"-12-20"; }
+    else if(tipo==="plr"){ total=res.data.totais.plr; desc="Participação nos lucros (PLR) "+ano; descBase=desc; }
+    else if(tipo==="plr1" || tipo==="plr2"){
+      var pct1=Number(percentual1); if(isNaN(pct1)||pct1<0||pct1>100) pct1=50;
+      var pctUsado=(tipo==="plr1")?pct1:round2_(100-pct1);
+      descBase="Participação nos lucros (PLR) ("+(tipo==="plr1"?"1ª":"2ª")+" parcela) "+ano;
+      desc=descBase+" — "+pctUsado+"% do total";
+      total=round2_(res.data.totais.plr*pctUsado/100);
+    }
     else return err_("Tipo inválido.");
     if(!dataVenc) return err_("Informe a data de pagamento.");
     if(total<=0) return err_("Valor total é zero — nada para lançar.");
-    var achadas=[]; objRows_("Pagar").forEach(function(p){ if(norm_(p.Categoria)==="salario" && String(p.Descricao||"").indexOf(desc)===0) achadas.push(p); });
+    var achadas=[]; objRows_("Pagar").forEach(function(p){ if(norm_(p.Categoria)==="salario" && String(p.Descricao||"").indexOf(descBase)===0) achadas.push(p); });
     if(achadas.length){
       apiUpdateRow("Pagar", achadas[0].ID, {Descricao:desc, Valor:total, Data:dataVenc, Categoria:"Salário"});
       for(var k=1;k<achadas.length;k++){ apiDelete("Pagar", achadas[k].ID); }
