@@ -1343,7 +1343,7 @@ function renderDecimoPLR(){
       var parcTip=r.adiantamento13>0?('Bruto: 1ª '+brl(r.parcela1Bruta)+' + 2ª '+brl(r.parcela2Bruta)+' · Adiantamento já descontado: '+brl(r.adiantamento13)):'';
       h+='<tr><td><a href="javascript:void(0)" onclick="abrirDecimoPLRColab(\''+escJs(r.nome)+'\')" style="color:#364B9B;font-weight:600;text-decoration:none">'+r.nome+(r.temHistorico?' <span class="miuda" title="tem meses com salário diferente do atual">✓ hist.</span>':'')+(r.adiantamento13>0?' <span class="miuda" style="color:#D4561C" title="'+parcTip+'">✓ adiant.</span>':'')+'</a>'+(r.semDataInicio?' <span class="miuda" style="color:#b23a48">(sem tempo de casa)</span>':'')+'</td>'+
          '<td class="r">'+brl(r.base)+'</td><td class="c">'+r.avos+'/12</td><td class="r">'+brl(r.integral13)+'</td>'+
-         '<td class="r" title="'+parcTip+'">'+brl(r.parcela1)+'</td><td class="r" title="'+parcTip+'">'+brl(r.parcela2)+'</td>'+
+         '<td class="r" title="'+parcTip+'">'+brl(r.parcela1)+(r.parcela13Manual?' <span class="miuda" title="divisão lançada manualmente">✎</span>':'')+'</td><td class="r" title="'+parcTip+'">'+brl(r.parcela2)+'</td>'+
          '<td class="c">'+r.anosCasa+(r.anosCasaManual?' <span class="miuda" title="lançado manualmente">✎</span>':'')+'</td><td class="c">'+r.percentualPLR+'%</td><td class="r">'+brl(r.valorPLR)+(r.valorPLRManual?' <span class="miuda" title="valor lançado manualmente, fora da regra">✎</span>':'')+'</td>'+
          '<td class="r"><b>'+brl(r.total)+'</b></td></tr>';
     });
@@ -1386,6 +1386,13 @@ function renderDecimoPLRModal(){
      '<div class="mfield"><div class="ml">Observação</div><input id="dp_adiant_obs" type="text" placeholder="ex.: adiantado em 15/06 via PIX" value="'+(ajuste.Adiantamento13Obs||'')+'"></div>'+
      '</div>'+
      '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn" style="background:#2f8f5b" onclick="salvarAdiantamento13()">💾 Salvar adiantamento</button><button class="btn" style="background:#8791a1" onclick="limparAdiantamento13()">🗑️ Limpar</button></div>';
+
+  h+='<div class="msec" style="margin-top:18px">13º de '+nome+' — divisão das parcelas (já descontado o adiantamento)</div>';
+  h+='<div class="mgrid" style="grid-template-columns:1fr 1fr">'+
+     '<div class="mfield"><div class="ml">1ª parcela do 13º (R$)</div><input id="dp_13_p1_manual" type="text" inputmode="decimal" placeholder="0,00" value="'+(ajuste.Parcela13_1Manual!=null&&Number(ajuste.Parcela13_1Manual)?String(ajuste.Parcela13_1Manual).replace('.',','):'')+'"></div>'+
+     (row?('<div class="mfield"><div class="ml">2ª parcela (calculada)</div><input type="text" disabled value="'+brl(row.parcela2)+'"></div>'):'<div></div>')+
+     '</div>'+
+     '<div style="margin-top:6px;display:flex;gap:6px"><button class="btn" style="background:#2f8f5b" onclick="salvar13Manual()">💾 Salvar</button><button class="btn" style="background:#8791a1" onclick="limpar13Manual()">🗑️ Limpar</button></div>';
 
   h+='<div class="msec" style="margin-top:18px">Salário/diária de '+ano+', mês a mês (pra corrigir o 13º)</div>';
   h+='<div class="form" style="grid-template-columns:repeat(6,1fr)">'+meses.map(function(m){
@@ -1437,6 +1444,20 @@ function limparAdiantamento13(){
   if(el('dp_adiant_valor')) el('dp_adiant_valor').value='';
   if(el('dp_adiant_obs')) el('dp_adiant_obs').value='';
   salvarAdiantamento13();
+}
+function salvar13Manual(){
+  var nome=dpModalNome; if(!nome) return;
+  var ano=lastDecimoPLRAno||(el('dp_ano')?el('dp_ano').value:String((TODAY||new Date()).getFullYear()));
+  var p1=val('dp_13_p1_manual');
+  call('apiSetDecimo13PLRAjuste',[ano,nome,{Parcela13_1Manual:p1}],function(res){
+    if(!res||!res.success){alert('Erro: '+((res&&res.error)||''));return;}
+    toast('Divisão do 13º salva.');
+    loadDataThen(function(){renderDecimoPLR();renderDecimoPLRModal();});
+  });
+}
+function limpar13Manual(){
+  if(el('dp_13_p1_manual')) el('dp_13_p1_manual').value='';
+  salvar13Manual();
 }
 function salvarPLRManual(){
   var nome=dpModalNome; if(!nome) return;

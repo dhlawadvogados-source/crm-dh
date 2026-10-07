@@ -46,7 +46,7 @@ var SHEETS = {
   ExtratoRegras: ["ID","Contem","Classe","Categoria","Conta","Ordem"],
   PLRFaixas:     ["ID","AnosMin","AnosMax","Percentual","Obs"],
   HistoricoSalarial: ["ID","Mes","Nome","Base"],
-  Decimo13PLRAjuste: ["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs","ValorPLRManual","PLRParcela1Manual"]
+  Decimo13PLRAjuste: ["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs","ValorPLRManual","PLRParcela1Manual","Parcela13_1Manual"]
 };
 
 // Advogados de referencia. VERSAO WEB: os valores/hora ficam so na aba Advogados da planilha.
@@ -1765,9 +1765,18 @@ function apiDecimoPLR(ano){
       var p2aj=round2_(Math.max(0, r.parcela2-adiant));
       var sobra=Math.max(0, adiant-r.parcela2);
       var p1aj=round2_(Math.max(0, r.parcela1-sobra));
+      // Divisão manual das parcelas do 13º (já líquido do adiantamento): "pagamos como a gente quiser" —
+      // ex.: em vez de 1ª cheia + 2ª com o resto do desconto, dividir igual nas duas.
+      var totalLiquido=round2_(p1aj+p2aj);
+      var p13ManualRaw=(ajuste && ajuste.Parcela13_1Manual!=null)?String(ajuste.Parcela13_1Manual).trim():"";
+      var parcela13Manual=false;
+      if(p13ManualRaw!==""){
+        var p1Man=round2_(Math.max(0, Math.min(money_(p13ManualRaw), totalLiquido)));
+        p1aj=p1Man; p2aj=round2_(totalLiquido-p1Man); parcela13Manual=true;
+      }
       return { nome:r.nome, base:r.base, avos:r.avos, integral13:r.integral,
         parcela1Bruta:r.parcela1, parcela2Bruta:r.parcela2, adiantamento13:round2_(adiant), adiantamento13Obs:String(ajuste?(ajuste.Adiantamento13Obs||""):""),
-        parcela1:p1aj, parcela2:p2aj,
+        parcela1:p1aj, parcela2:p2aj, parcela13Manual:parcela13Manual,
         anosCasa:p.anos||0, percentualPLR:p.percentual||0, valorPLR:p.valor||0, semDataInicio:!!p.semData, anosCasaManual:!!p.manual,
         valorPLRManual:!!p.valorManual, plrParcela1Manual:String(ajuste?(ajuste.PLRParcela1Manual!=null?ajuste.PLRParcela1Manual:""):""),
         detalhesMeses:r.detalhesMeses||[], temHistorico:!!r.temHistorico,
@@ -1786,7 +1795,7 @@ function apiSetDecimo13PLRAjuste(ano, nome, obj){
     if(!ano) return err_("Ano inválido."); if(!nome) return err_("Nome inválido.");
     var sh=getDb_().getSheetByName("Decimo13PLRAjuste");
     var head0=sh.getRange(1,1,1,Math.max(1,sh.getLastColumn())).getValues()[0];
-    var precisa=["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs","ValorPLRManual","PLRParcela1Manual"];
+    var precisa=["ID","Ano","Nome","AnosCasaManual","Adiantamento13","Adiantamento13Obs","ValorPLRManual","PLRParcela1Manual","Parcela13_1Manual"];
     var faltam=precisa.filter(function(c){ return head0.indexOf(c)<0; });
     if(faltam.length){ sh.getRange(1,head0.length+1,1,faltam.length).setValues([faltam]); }
     var vals=sh.getDataRange().getValues(); var head=vals[0];
@@ -1798,6 +1807,7 @@ function apiSetDecimo13PLRAjuste(ano, nome, obj){
     if("Adiantamento13Obs" in obj && ci.Adiantamento13Obs!=null) row[ci.Adiantamento13Obs]=obj.Adiantamento13Obs;
     if("ValorPLRManual" in obj && ci.ValorPLRManual!=null) row[ci.ValorPLRManual]=obj.ValorPLRManual;
     if("PLRParcela1Manual" in obj && ci.PLRParcela1Manual!=null) row[ci.PLRParcela1Manual]=obj.PLRParcela1Manual;
+    if("Parcela13_1Manual" in obj && ci.Parcela13_1Manual!=null) row[ci.Parcela13_1Manual]=obj.Parcela13_1Manual;
     row[ci.Ano]=ano; row[ci.Nome]=nome;
     if(ci.ID!=null && !row[ci.ID]) row[ci.ID]=newId_();
     if(lin>=0) sh.getRange(lin+1,1,1,row.length).setValues([row]); else sh.appendRow(row);
