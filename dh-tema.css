@@ -235,10 +235,9 @@ body.lg-open{overflow:hidden;}
 .lg-switch{display:none;margin-top:18px;color:var(--dh-azul);font-size:12px;text-decoration:underline;}
 .lg-gate.denied .lg-switch{display:inline-block;}
 .lg-foot{color:#8F9AC0;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-top:26px;text-align:center;}
-.lg-row{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;align-items:flex-start;max-width:900px;}
-.lg-row .lg-wrap{width:auto;flex:1 1 380px;max-width:420px;}
-.lg-box-soon{opacity:.94;}
-.lg-box-soon .lg-logo{filter:grayscale(1) opacity(.75);}
+.lg-row{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;align-items:stretch;width:100%;max-width:900px;}
+.lg-row .lg-wrap{width:auto;flex:1 1 380px;max-width:420px;display:flex;}
+.lg-row .lg-wrap .lg-box{width:100%;box-sizing:border-box;}
 .lg-btn-disabled{background:#9aa0ae!important;cursor:not-allowed!important;}
 .lg-btn-disabled:hover{background:#9aa0ae!important;}
 
