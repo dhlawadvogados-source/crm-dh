@@ -8,10 +8,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dh-login.css?v=CTRL3">
+<link rel="stylesheet" href="dh-login.css?v=CTRL4">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=CTRL3"></script>
-<script src="gas-shim.js?v=CTRL3"></script>
+<script src="config.js?v=CTRL4"></script>
+<script src="gas-shim.js?v=CTRL4"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Layout: sidebar fixo (igual ao CRM real) + topbar + área de conteúdo com telas que trocam por clique no menu.
@@ -147,7 +147,7 @@ tr:last-child td{border-bottom:0;}
 .cp{position:relative;}
 .cp::after{content:'';position:absolute;right:13px;top:50%;width:8px;height:8px;border:1.6px solid var(--muted);
   border-width:0 1.6px 1.6px 0;transform:translateY(-65%) rotate(45deg);pointer-events:none;}
-.cp-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--card);border:1.5px solid var(--line);
+.cp-list{position:absolute;left:0;right:auto;min-width:100%;width:max-content;max-width:min(560px,86vw);top:calc(100% + 4px);background:var(--card);border:1.5px solid var(--line);
   border-radius:6px;box-shadow:var(--sh2);max-height:190px;overflow-y:auto;z-index:25;display:none;}
 .cp.open .cp-list{display:block;}
 .cp-list div{padding:9px 13px;font-size:13px;cursor:pointer;}
@@ -264,6 +264,28 @@ body.lg-open{overflow:hidden;}
 .ib.red:hover{background:#FBE7E7;border-color:#C13C3C;}
 .edit-badge .ico{vertical-align:-2px;}
 td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;font-family:inherit;}
+.pasta-row{cursor:pointer;}
+.pasta-row:hover td{background:#F6F8FD;}
+.pasta-nome{display:flex;align-items:center;gap:12px;}
+.pasta-nome b{display:block;font-size:13.5px;color:var(--ink);}
+.pasta-nome small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;}
+.pasta-ic{width:36px;height:36px;border-radius:9px;background:#EEF1FA;color:var(--dh-azul);display:flex;align-items:center;justify-content:center;flex:none;}
+#verTitulo svg{vertical-align:-4px;color:var(--dh-azul);}
+.pasta-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
+.pasta-kpis div{background:var(--bg);border-radius:10px;padding:12px 14px;}
+.pasta-kpis span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;}
+.pasta-kpis b{display:block;font-size:24px;color:var(--dh-marinho);margin-top:4px;}
+.pasta-kpis .warn{background:var(--warn-bg);} .pasta-kpis .warn b{color:var(--warn);}
+.pasta-nota{font-size:12.5px;line-height:1.55;color:var(--muted);margin:0 0 14px;}
+.pasta-bar{margin-bottom:10px;}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;}
+.seg button{background:var(--card);border:0;padding:7px 14px;font-size:12px;font-weight:600;color:var(--muted);font-family:inherit;}
+.seg button.on{background:var(--dh-azul);color:#fff;}
+.cp-list div[data-n]{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.cp-nome{white-space:nowrap;}
+.cp-tag{display:inline-block;flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 8px;border-radius:99px;background:#E7ECFA;color:var(--dh-azul);white-space:nowrap;}
+.cp-sel{position:absolute;right:34px;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--dh-azul);background:#E7ECFA;border-radius:99px;padding:2px 8px;pointer-events:none;}
+.cp-sel:empty{display:none;}
 </style>
 </head>
 <body class="lg-open">
@@ -323,7 +345,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
       <section class="view" id="v-clientes">
         <h1>Clientes</h1>
         <p class="sub">Cadastro único, o mesmo do Financeiro. Valores e dados bancários do cliente ficam só no Financeiro.</p>
-        <div class="search"><input id="clBusca" placeholder="Buscar cliente por nome…" oninput="PG.cli=1;renderClientes()"><select id="clStatus" onchange="PG.cli=1;renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="ativos">Ativos</option><option value="todos">Todos</option></select><button class="btn" data-ico="mais" onclick="novoCliente()">Novo cliente</button></div>
+        <div class="search"><input id="clBusca" placeholder="Buscar cliente por nome…" oninput="PG.cli=1;renderClientes()"><select id="clTipo" onchange="PG.cli=1;renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="">Todos os contratos</option><option>Assessoria mensal</option><option>DET</option><option>Pontual</option></select><select id="clStatus" onchange="PG.cli=1;renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="ativos">Ativos</option><option value="todos">Todos</option></select><button class="btn" data-ico="mais" onclick="novoCliente()">Novo cliente</button></div>
         <div class="card" style="padding:0"><div class="tbl-wrap" id="clTabela"></div></div>
         <div class="mbg" id="md_cl" onclick="if(event.target===this)fecharModal('md_cl')"><div class="mdl" id="clCard">
           <h2><button class="mx" type="button" onclick="fecharModal('md_cl')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="clTitulo">Novo cliente</span></h2>
@@ -342,6 +364,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
           <div class="formrow">
             <div><label>Início do contrato</label><input type="date" id="cl_DataInicio"></div>
             <div><label>Fim do contrato</label><input type="date" id="cl_DataFim"></div>
+            <div class="wide" style="grid-column:span 2"><label id="clObjLbl">O que é este contrato</label><input id="cl_ObjetoContrato" placeholder="Ex.: Ação revisional contra o Banco X; parecer sobre sucessão…"></div>
           </div>
           <p class="example-note" style="margin:0 0 12px">Mensalidade, valor da hora extra, valores de audiência/processo e dados de pagamento são preenchidos pelo Financeiro (ele recebe um aviso).</p>
           <div class="btn-row"><button class="btn" id="clBtn" onclick="salvarCliente()">Cadastrar cliente</button><button class="btn ghost" onclick="fecharModal('md_cl')">Cancelar</button></div>
@@ -352,7 +375,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
       <!-- PROCESSOS -->
       <section class="view" id="v-processos">
         <h1>Processos</h1>
-        <p class="sub">Processos de cada cliente, com valor da causa, condenação/acordo, valores recebidos e saving.</p>
+        <p class="sub">Uma pasta por cliente. O sistema compara os processos em uso em <b id="prMesTxt"></b> com a quantidade do contrato e, se passar, a cobrança de processo extra entra sozinha no Fechamento do mês.</p>
         <div class="mbg" id="md_pr" onclick="if(event.target===this)fecharModal('md_pr')"><div class="mdl" id="prCard">
           <h2><button class="mx" type="button" onclick="fecharModal('md_pr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="prTitulo">Novo processo</span></h2>
           <input type="hidden" id="pr_ID">
@@ -369,7 +392,6 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
             <div><label>Condenação / acordo (R$)</label><input id="pr_CondenacaoAcordo" placeholder="0,00"></div>
             <div><label>Valores recebidos (R$)</label><input id="pr_ValoresRecebidos" placeholder="0,00"></div>
             <div><label>Saving (R$)</label><input id="pr_Saving" placeholder="automático se vazio"></div>
-            <div><label>Classificação</label><select id="pr_Classificacao"><option value="Incluso">Incluso no contrato</option><option value="Extra">Extra</option></select></div>
             <div><label>Situação</label><select id="pr_Situacao"><option>Ativo</option><option>Arquivado</option></select></div>
           </div>
           <div class="formrow">
@@ -381,7 +403,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
           <datalist id="dlAreas"><option>Trabalhista</option><option>Cível</option><option>Tributário</option><option>Empresarial</option><option>Consumidor</option><option>Previdenciário</option></datalist>
         </div></div>
         <div class="card" style="padding:0">
-          <div class="toolbar"><input id="prBusca" placeholder="Buscar por cliente, número ou partes…" oninput="PG.pr=1;renderProcessos()"><select id="prFiltro" onchange="PG.pr=1;renderProcessos()"><option value="Ativo">Ativos</option><option value="Arquivado">Arquivados</option><option value="">Todos</option></select><button class="btn" data-ico="mais" onclick="novoProcesso()">Novo processo</button></div>
+          <div class="toolbar"><input id="prBusca" placeholder="Buscar cliente, número do processo ou partes…" oninput="PG.pr=1;renderProcessos()"><select id="prFiltro" onchange="PG.pr=1;renderProcessos()"><option value="">Todas as pastas</option><option value="exc">Acima do contrato</option><option value="com">Com processos</option></select><button class="btn" data-ico="mais" onclick="novoProcesso()">Novo processo</button></div>
           <div class="tbl-wrap" id="prTabela"></div>
         </div>
       </section>
@@ -436,7 +458,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
             <div><label>Cliente</label><div class="cp"><input id="ex_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
             <div><label>Horas processuais (hh:mm)</label><input id="ex_HorasProcessual" placeholder="05:30"></div>
             <div><label>Audiências realizadas (qtd)</label><input id="ex_Audiencias" placeholder="0"></div>
-            <div><label>Excesso de processos (qtd)</label><input id="ex_ExcessoProcessos" placeholder="0"></div>
+            <div><label>Excesso de processos (qtd)</label><input id="ex_ExcessoProcessos" placeholder="0"><small id="exProcAuto" class="muted" style="display:none;margin-top:4px">Este cliente já tem pasta de processos: o excesso é calculado sozinho e este número não é usado.</small></div>
             <div><label>Reembolso de custas (R$)</label><input id="ex_Custas" placeholder="0,00"></div>
           </div>
           <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição das audiências</label><input id="ex_DescricaoAudiencias" placeholder="30/09/2026 - 14:10 - 1VT ... Audiência UNA"></div><div class="wide" style="grid-column:span 2"><label>Descrição das custas</label><input id="ex_DescricaoCustas" placeholder="Correio: notificação extrajudicial"></div></div>
@@ -469,6 +491,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
           <h2><span class="t">Gerar relatório</span></h2>
           <div class="formrow">
             <div><label>Cliente</label><div class="cp"><input id="ra_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Contrato</label><select id="ra_Contrato"><option value="">Todos os contratos</option></select></div>
             <div><label>De</label><input type="month" id="ra_De"></div>
             <div><label>Até</label><input type="month" id="ra_Ate"></div>
           </div>
@@ -513,7 +536,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
       <!-- USUÁRIOS (só Admin) -->
       <section class="view" id="v-usuarios">
         <h1>Usuários e perfis</h1>
-        <p class="sub">Quem entra no CRM e com qual perfil. Controladoria nunca vê o financeiro. Os e-mails fixos do sistema são sempre Admin.</p>
+        <p class="sub">Acessos cadastrados e o perfil de cada um. A Controladoria nunca vê o financeiro.</p>
         <div class="card">
           <h2><span class="t">Cadastrar / alterar acesso</span></h2>
           <div class="formrow">
@@ -533,6 +556,6 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
 <div class="mbg" id="md_ver" onclick="if(event.target===this)fecharModal('md_ver')"><div class="mdl"><h2><button class="mx" type="button" onclick="fecharModal('md_ver')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="verTitulo"></span></h2><div id="verCorpo"></div></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="controladoria-tela.js?v=CTRL3"></script>
+<script src="controladoria-tela.js?v=CTRL4"></script>
 </body>
 </html>

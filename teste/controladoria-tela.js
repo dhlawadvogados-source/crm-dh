@@ -63,7 +63,7 @@ function paginar(k, l, n) {
   return { itens: l.slice((p - 1) * n, p * n), pager: pager };
 }
 window.irPag = function (k, p) { PG[k] = p; if (REND[k]) REND[k](); };
-function abrirModal(id) { $(id).classList.add('on'); document.body.style.overflow = 'hidden'; var f = $(id).querySelector('input:not([type=hidden]):not([type=file]),select,textarea'); if (f && id !== 'md_ver') setTimeout(function () { try { f.focus(); } catch (e) {} }, 60); }
+function abrirModal(id) { $(id).style.zIndex = 80 + document.querySelectorAll('.mbg.on').length + 1; $(id).classList.add('on'); document.body.style.overflow = 'hidden'; var f = $(id).querySelector('input:not([type=hidden]):not([type=file]),select,textarea'); if (f && id !== 'md_ver') setTimeout(function () { try { f.focus(); } catch (e) {} }, 60); }
 window.fecharModal = function (id) { $(id).classList.remove('on'); if (!document.querySelector('.mbg.on')) document.body.style.overflow = ''; };
 document.addEventListener('keydown', function (e) { if (e.key === 'Escape') { var abertos = document.querySelectorAll('.mbg.on'); if (abertos.length) fecharModal(abertos[abertos.length - 1].id); } });
 function ib(icone, titulo, onclick, cls) { return '<button class="ib' + (cls ? ' ' + cls : '') + '" title="' + titulo + '" onclick="' + onclick + '">' + icone + '</button>'; }
@@ -74,7 +74,7 @@ function isoData(v) { var m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
 var ICONS = {
   painel: '<path d="M3 10.8 12 3l9 7.8"/><path d="M5 9.6V21h14V9.6"/>',
   clientes: '<rect x="5.5" y="3" width="13" height="18" rx="2.2"/><path d="M9 8h6M9 12h6M9 16h4"/>',
-  processos: '<path d="M4.5 20V10.5M10 20V4M15.5 20v-7M21 20H3"/>',
+  processos: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/>',
   custas: '<path d="M12 3v11"/><path d="m7.5 11 4.5 4.5L16.5 11"/><path d="M4.5 21h15"/>',
   horas: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
   relatorio: '<rect x="4.5" y="3" width="15" height="18" rx="2"/><path d="M8 13v4M12 10v7M16 13.5v3.5"/>',
@@ -108,16 +108,26 @@ function nomesClientes() {
   return (D ? D.clientes : []).slice().sort(function (a, b) { var aa = isAtivo(a) ? 0 : 1, bb = isAtivo(b) ? 0 : 1; return aa - bb || String(a.Nome).localeCompare(String(b.Nome)); });
 }
 function isAtivo(c) { var s = norm(c.Status); return s.indexOf('ativo') >= 0 && s.indexOf('inativo') < 0; }
+function rotuloContrato(c) { return tipoContrato(c) + (c.ObjetoContrato ? ' · ' + c.ObjetoContrato : ''); }
+function contratoTag(c) { return '<span class="cp-tag" title="' + esc(rotuloContrato(c)) + '">' + esc(rotuloContrato(c).length > 34 ? rotuloContrato(c).slice(0, 33) + '…' : rotuloContrato(c)) + '</span>'; }
+function nomeRepetido(nome) { return (D ? D.clientes : []).filter(function (c) { return norm(c.Nome) === norm(nome); }).length > 1; }
+function contratoPorId(id) { var c = (D ? D.clientes : []).filter(function (x) { return String(x.ID) === String(id); })[0]; return c ? rotuloContrato(c) : ''; }
+// ID do cadastro escolhido no seletor (só vale se o nome digitado ainda é o mesmo)
+function cidDe(inputId) { var i = $(inputId); return i.dataset.cid && i.dataset.nome === i.value ? i.dataset.cid : ''; }
+function marcarCid(inputId, nome, id) { var i = $(inputId); i.value = nome || ''; i.dataset.nome = nome || ''; i.dataset.cid = id || ''; i.dispatchEvent(new Event('cid')); }
 function wireClientPicker(root) {
   root.querySelectorAll('.cp').forEach(function (cp) {
     if (cp.dataset.wired) return; cp.dataset.wired = '1';
     var inp = cp.querySelector('input'), list = cp.querySelector('.cp-list');
+    var sel = document.createElement('span'); sel.className = 'cp-sel'; cp.appendChild(sel);
+    inp.addEventListener('input', function () { sel.textContent = ''; });
+    inp.addEventListener('cid', function () { sel.textContent = inp.dataset.cid && nomeRepetido(inp.value) ? contratoPorId(inp.dataset.cid) : ''; });
     function render(f) {
       f = norm(f);
       var m = nomesClientes().filter(function (c) { return norm(c.Nome).indexOf(f) > -1; }).slice(0, 60);
-      list.innerHTML = m.length ? m.map(function (c) { return '<div data-n="' + esc(c.Nome) + '">' + esc(c.Nome) + (isAtivo(c) ? '' : ' <span class="muted">(inativo)</span>') + '</div>'; }).join('')
+      list.innerHTML = m.length ? m.map(function (c) { return '<div data-n="' + esc(c.Nome) + '" data-id="' + esc(c.ID) + '"><span class="cp-nome">' + esc(c.Nome) + (isAtivo(c) ? '' : ' <span class="muted">(inativo)</span>') + '</span>' + contratoTag(c) + '</div>'; }).join('')
         : '<div class="cp-empty">Nenhum cliente cadastrado com esse nome</div>';
-      list.querySelectorAll('div[data-n]').forEach(function (it) { it.onmousedown = function (e) { e.preventDefault(); inp.value = it.dataset.n; cp.classList.remove('open'); inp.dispatchEvent(new Event('blur')); }; });
+      list.querySelectorAll('div[data-n]').forEach(function (it) { it.onmousedown = function (e) { e.preventDefault(); inp.value = it.dataset.n; inp.dataset.nome = it.dataset.n; inp.dataset.cid = it.dataset.id; var tg = cp.querySelector('.cp-sel'); if (tg) tg.textContent = nomeRepetido(it.dataset.n) ? contratoPorId(it.dataset.id) : ''; cp.classList.remove('open'); inp.dispatchEvent(new Event('blur')); }; });
     }
     inp.addEventListener('focus', function () { render(inp.value); cp.classList.add('open'); });
     inp.addEventListener('input', function () { render(inp.value); cp.classList.add('open'); });
@@ -185,17 +195,19 @@ window.resolverPend = function (id) { acao('ctrlResolverPendencia', [id], 'Pend�
 /* ---------- clientes ---------- */
 function opcoesDistintas(lista, campo, extra) { var o = {}; (extra || []).forEach(function (x) { if (x) o[x] = 1; }); lista.forEach(function (x) { if (x[campo]) o[x[campo]] = 1; }); return Object.keys(o).sort().map(function (x) { return '<option value="' + esc(x) + '">'; }).join(''); }
 REND.cli = function () { renderClientes(); };
+// Assessoria mensal / DET / Pontual (o cadastro antigo pode ter só "Assessoria")
+function tipoContrato(c) { var t = norm(c.Tipo); if (/det/.test(t)) return 'DET'; if (/pontual/.test(t)) return 'Pontual'; if (/assess|mensal/.test(t)) return 'Assessoria mensal'; return 'Outros'; }
 window.renderClientes = function () {
-  var f = norm($('clBusca').value), soAt = $('clStatus').value === 'ativos';
-  var l = nomesClientes().filter(function (c) { return (!soAt || isAtivo(c)) && norm(c.Nome).indexOf(f) > -1; });
+  var f = norm($('clBusca').value), soAt = $('clStatus').value === 'ativos', tp = $('clTipo').value;
+  var l = nomesClientes().filter(function (c) { return (!soAt || isAtivo(c)) && (!tp || tipoContrato(c) === tp) && norm(c.Nome).indexOf(f) > -1; });
   var P = paginar('cli', l);
   $('clTabela').innerHTML = l.length ? '<table><thead><tr><th>Cliente</th><th>Modalidade</th><th>Situação</th><th>Horas/mês</th><th>Responsável</th><th></th></tr></thead><tbody>' +
     P.itens.map(function (c) { var id = esc(c.ID); var ct = hDec(c.HorasContratadas);
-      return '<tr><td class="cliente">' + esc(c.Nome) + '</td><td>' + esc(c.Tipo || '—') + '</td><td>' + badgeStatus(isAtivo(c) ? 'Ativo' : (c.Status || '—')) + '</td><td>' + (ct ? decHm(ct) : '—') + '</td><td>' + esc(c.Responsavel || '—') +
+      return '<tr><td class="cliente">' + esc(c.Nome) + '</td><td>' + esc(c.Tipo || '—') + (c.ObjetoContrato ? '<br><span class="muted">' + esc(c.ObjetoContrato) + '</span>' : '') + '</td><td>' + badgeStatus(isAtivo(c) ? 'Ativo' : (c.Status || '—')) + '</td><td>' + (ct ? decHm(ct) : '—') + '</td><td>' + esc(c.Responsavel || '—') +
         '</td><td class="acts">' + acoes("verCliente('" + id + "')", "editarCliente('" + id + "')", "excluirCliente('" + id + "')") + '</td></tr>'; }).join('') + '</tbody></table>' + P.pager
     : vazio('Nenhum cliente encontrado.');
 };
-var CL = ['Nome', 'Tipo', 'Status', 'HorasContratadas', 'ProcessosContratados', 'Responsavel', 'Subtipo', 'DataInicio', 'DataFim'];
+var CL = ['Nome', 'Tipo', 'Status', 'HorasContratadas', 'ProcessosContratados', 'Responsavel', 'Subtipo', 'DataInicio', 'DataFim', 'ObjetoContrato'];
 function prepararFormCliente() {
   $('dlTipos').innerHTML = opcoesDistintas(D.clientes, 'Tipo', ['Assessoria mensal', 'Pontual', 'DET']);
   $('dlStatus').innerHTML = opcoesDistintas(D.clientes, 'Status', ['Ativo', 'Inativo', 'Encerrado']);
@@ -227,7 +239,7 @@ window.verCliente = function (id) {
   var r = RESUMO && RESUMO.clientes.filter(function (x) { return norm(x.cliente) === norm(c.Nome); })[0];
   var aguard = D.custas.filter(function (x) { return norm(x.Cliente) === norm(c.Nome) && x.Status === 'Lançado'; }).length;
   var h = '<div class="ficha">' + campoFicha('Modalidade', esc(c.Tipo)) + campoFicha('Situação', badgeStatus(isAtivo(c) ? 'Ativo' : (c.Status || '—'))) + campoFicha('Responsável', esc(c.Responsavel)) +
-    campoFicha('Horas contratadas/mês', hDec(c.HorasContratadas) ? decHm(hDec(c.HorasContratadas)) : '') + campoFicha('Processos contratados', esc(c.ProcessosContratados)) + campoFicha('Subtipo', esc(c.Subtipo)) +
+    campoFicha('Horas contratadas/mês', hDec(c.HorasContratadas) ? decHm(hDec(c.HorasContratadas)) : '') + campoFicha('Processos contratados', esc(c.ProcessosContratados)) + campoFicha('O que é este contrato', esc(c.ObjetoContrato)) + campoFicha('Subtipo', esc(c.Subtipo)) +
     campoFicha('Início do contrato', c.DataInicio ? fmtD(c.DataInicio) : '') + campoFicha('Fim do contrato', c.DataFim ? fmtD(c.DataFim) : '') + '</div>';
   if (r) h += '<div class="ficha-sec">Fechamento de ' + mesNome(RESUMO.competencia) + '</div><div class="ficha">' + campoFicha('Consultivo', hm(r.consultivo) + ' (' + r.tarefas + ' tarefas)') + campoFicha('Uso do pacote', r.percentual != null ? r.percentual + '%' : '') +
     campoFicha('Excedente', r.excedenteDec > 0 ? '<b style="color:var(--dh-laranja)">' + hm(r.excedente) + '</b>' : '') + campoFicha('Processual', r.horasProcessual ? hm(r.horasProcessual) : '') + '</div>';
@@ -237,47 +249,93 @@ window.verCliente = function (id) {
   $('verTitulo').textContent = c.Nome; $('verCorpo').innerHTML = h; abrirModal('md_ver');
 };
 
-/* ---------- processos ---------- */
-var PR = ['Cliente', 'NumeroCNJ', 'Partes', 'Vara', 'AreaJuridica', 'AdvogadoResponsavel', 'ValorCausa', 'CondenacaoAcordo', 'ValoresRecebidos', 'Saving', 'Classificacao', 'Situacao', 'DataInicio', 'DataEncerramento', 'SituacaoAtualizada'];
+/* ---------- processos: uma pasta por cliente ---------- */
+var PR = ['Cliente', 'NumeroCNJ', 'Partes', 'Vara', 'AreaJuridica', 'AdvogadoResponsavel', 'ValorCausa', 'CondenacaoAcordo', 'ValoresRecebidos', 'Saving', 'Situacao', 'DataInicio', 'DataEncerramento', 'SituacaoAtualizada'];
+var PASTA = null, PASTA_ABA = 'Ativo';
+function pastaMes(nome) { var m = (D.processosMes && D.processosMes.clientes) || {}; return m[nome] || { usados: 0, contratados: 0, excedente: 0, extras: [] }; }
+function pastas() {
+  var por = {};
+  D.clientes.forEach(function (c) { if (!isAtivo(c) || !(Number(c.ProcessosContratados) > 0)) return; var k = norm(c.Nome);
+    if (!por[k] || Number(c.ProcessosContratados) > Number(por[k].cli.ProcessosContratados)) por[k] = { nome: c.Nome, cli: c, procs: [] }; });
+  D.processos.forEach(function (p) { var k = norm(p.Cliente); if (!k) return; if (!por[k]) { var c = D.clientes.filter(function (x) { return norm(x.Nome) === k; })[0]; por[k] = { nome: c ? c.Nome : p.Cliente, cli: c, procs: [] }; } por[k].procs.push(p); });
+  return Object.keys(por).map(function (k) {
+    var f = por[k], m = pastaMes(f.nome); f.contratados = f.cli ? (Number(f.cli.ProcessosContratados) || 0) : 0;
+    f.ativos = f.procs.filter(function (p) { return p.Situacao !== 'Arquivado'; }).length; f.arquivados = f.procs.length - f.ativos;
+    f.usados = m.usados; f.excedente = m.excedente; f.extras = m.extras || []; return f;
+  });
+}
+function badgePasta(f) {
+  if (!f.contratados) return '<span class="badge cancel" title="O cadastro do cliente não tem quantidade de processos contratados">sem limite no cadastro</span>';
+  if (f.excedente > 0) return '<span class="badge extra">+' + f.excedente + ' acima do contrato</span>';
+  return '<span class="badge ok">dentro do contrato</span>';
+}
+var IC_PASTA = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.2l2 2.2h8.8A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5z"/></svg>';
 REND.pr = function () { renderProcessos(); };
 window.renderProcessos = function () {
-  var f = norm($('prBusca').value), st = $('prFiltro').value;
-  var l = D.processos.filter(function (p) { return (!st || p.Situacao === st) && (norm(p.Cliente) + ' ' + norm(p.NumeroCNJ) + ' ' + norm(p.Partes)).indexOf(f) > -1; })
-    .sort(function (a, b) { return String(a.Cliente).localeCompare(b.Cliente); });
+  var f = norm($('prBusca').value), filtro = $('prFiltro').value, mesAt = (D.processosMes && D.processosMes.competencia) || mesAtual();
+  $('prMesTxt').textContent = mesNome(mesAt);
+  var l = pastas().filter(function (p) {
+    if (filtro === 'exc' && !(p.excedente > 0)) return false;
+    if (filtro === 'com' && !p.procs.length) return false;
+    return !f || norm(p.nome).indexOf(f) > -1 || p.procs.some(function (x) { return (norm(x.NumeroCNJ) + ' ' + norm(x.Partes)).indexOf(f) > -1; });
+  }).sort(function (a, b) { return (b.excedente - a.excedente) || String(a.nome).localeCompare(b.nome); });
   var P = paginar('pr', l);
-  $('prTabela').innerHTML = l.length ? '<table><thead><tr><th>Cliente</th><th>Nº / partes</th><th>Área</th><th>Valor da causa</th><th>Situação</th><th></th></tr></thead><tbody>' +
-    P.itens.map(function (p) { var id = esc(p.ID);
-      return '<tr><td class="cliente">' + esc(p.Cliente) + '</td><td>' + esc(p.NumeroCNJ || '—') + (p.Partes ? '<br><span class="muted">' + esc(p.Partes) + '</span>' : '') + '</td><td>' + esc(p.AreaJuridica || '—') +
-        '</td><td class="money">' + (p.ValorCausa !== '' ? brl(p.ValorCausa) : '—') + '</td><td>' + badgeStatus(p.Situacao) + (p.Classificacao === 'Extra' ? ' <span class="badge extra">extra</span>' : '') +
-        '</td><td class="acts">' + acoes("verProcesso('" + id + "')", "editarProcesso('" + id + "')", "excluirProcesso('" + id + "')") + '</td></tr>';
-    }).join('') + '</tbody></table>' + P.pager : vazio('Nenhum processo ' + (st === 'Ativo' ? 'ativo ' : st === 'Arquivado' ? 'arquivado ' : '') + 'encontrado.');
+  $('prTabela').innerHTML = l.length ? '<table><thead><tr><th>Pasta do cliente</th><th>Contratados</th><th>Em uso em ' + esc(mesNome(mesAt)) + '</th><th>Situação</th><th></th></tr></thead><tbody>' +
+    P.itens.map(function (p) { var n = esc(p.nome).replace(/'/g, '&#39;'), a = "abrirPasta('" + esc(p.nome).replace(/'/g, "\\'") + "')";
+      return '<tr class="pasta-row" onclick="' + a + '"><td><div class="pasta-nome"><span class="pasta-ic">' + IC_PASTA + '</span><span><b>' + esc(p.nome) + '</b><small>' + p.ativos + ' ativo(s)' + (p.arquivados ? ' · ' + p.arquivados + ' arquivado(s)' : '') + '</small></span></div></td>' +
+        '<td>' + (p.contratados || '—') + '</td><td><b>' + p.usados + '</b></td><td>' + badgePasta(p) + '</td>' +
+        '<td class="acts" onclick="event.stopPropagation()">' + ib(ic('ver'), 'Abrir pasta', a) + ib(ic('mais'), 'Novo processo nesta pasta', "novoProcesso('" + esc(p.nome).replace(/'/g, "\\'") + "')") + '</td></tr>';
+    }).join('') + '</tbody></table>' + P.pager : vazio(filtro === 'exc' ? 'Nenhum cliente acima do contrato neste mês.' : 'Nenhuma pasta encontrada.');
+  if (PASTA && $('md_ver').classList.contains('on') && $('verCorpo').querySelector('.pasta')) renderPasta();
 };
+window.abrirPasta = function (nome) { PASTA = nome; PASTA_ABA = 'Ativo'; PG.pp = 1; renderPasta(); abrirModal('md_ver'); };
+window.abaPasta = function (a) { PASTA_ABA = a; PG.pp = 1; renderPasta(); };
+REND.pp = function () { renderPasta(); };
+function renderPasta() {
+  var f = pastas().filter(function (x) { return x.nome === PASTA; })[0] || { nome: PASTA, procs: [], contratados: 0, usados: 0, excedente: 0, extras: [], ativos: 0, arquivados: 0 };
+  var mesAt = (D.processosMes && D.processosMes.competencia) || mesAtual();
+  var l = f.procs.filter(function (p) { return PASTA_ABA === 'Arquivado' ? p.Situacao === 'Arquivado' : p.Situacao !== 'Arquivado'; })
+    .sort(function (a, b) { return String(a.DataInicio || a.DataCriacao || '').localeCompare(String(b.DataInicio || b.DataCriacao || '')); });
+  var P = paginar('pp', l), nq = esc(f.nome).replace(/'/g, "\\'");
+  var h = '<div class="pasta"><div class="pasta-kpis">' +
+    '<div><span>Contratados</span><b>' + (f.contratados || '—') + '</b></div>' +
+    '<div><span>Em uso em ' + esc(mesNome(mesAt)) + '</span><b>' + f.usados + '</b></div>' +
+    '<div class="' + (f.excedente > 0 ? 'warn' : '') + '"><span>Acima do contrato</span><b>' + (f.contratados ? f.excedente : '—') + '</b></div></div>' +
+    '<p class="pasta-nota">' + (f.contratados ? (f.excedente > 0 ? 'Os <b>' + f.excedente + ' processo(s) mais recentes</b> passam do contrato e são cobrados como processo extra no Contas a Receber de <b>' + esc(mesNome(proxMes(mesAt))) + '</b>, quando você sincronizar o Fechamento de ' + esc(mesNome(mesAt)) + '.' : 'Dentro do contrato: nenhuma cobrança de processo extra neste mês.') : 'O cadastro deste cliente não tem quantidade de processos contratados, então não há cobrança automática de processo extra.') + '</p>' +
+    '<div class="btn-row pasta-bar"><div class="seg"><button class="' + (PASTA_ABA === 'Ativo' ? 'on' : '') + '" onclick="abaPasta(\'Ativo\')">Ativos (' + f.ativos + ')</button><button class="' + (PASTA_ABA === 'Arquivado' ? 'on' : '') + '" onclick="abaPasta(\'Arquivado\')">Arquivados (' + f.arquivados + ')</button></div>' +
+    '<button class="btn sm" style="margin-left:auto" onclick="novoProcesso(\'' + nq + '\')">' + ic('mais') + ' Novo processo</button></div>' +
+    (l.length ? '<div class="tbl-wrap"><table><thead><tr><th>Nº / partes</th><th>Área</th><th>Início</th><th>Situação</th><th></th></tr></thead><tbody>' +
+      P.itens.map(function (p) { var id = esc(p.ID), extra = (f.extras || []).indexOf(String(p.ID)) > -1;
+        return '<tr><td>' + esc(p.NumeroCNJ || '—') + (p.Partes ? '<br><span class="muted">' + esc(p.Partes) + '</span>' : '') + '</td><td>' + esc(p.AreaJuridica || '—') + '</td><td>' + (p.DataInicio ? fmtD(p.DataInicio) : '—') +
+          '</td><td>' + badgeStatus(p.Situacao) + (extra ? ' <span class="badge extra" title="Passa do contrato neste mês">extra</span>' : '') + '</td><td class="acts">' + acoes("verProcesso('" + id + "')", "editarProcesso('" + id + "')", "excluirProcesso('" + id + "')") + '</td></tr>';
+      }).join('') + '</tbody></table></div>' + P.pager : vazio(PASTA_ABA === 'Arquivado' ? 'Nenhum processo arquivado.' : 'Nenhum processo ativo nesta pasta.')) + '</div>';
+  $('verTitulo').innerHTML = IC_PASTA + ' ' + esc(f.nome); $('verCorpo').innerHTML = h;
+}
 window.verProcesso = function (id) {
   var p = D.processos.filter(function (x) { return String(x.ID) === String(id); })[0]; if (!p) return;
   function v(x) { return x !== '' && x != null ? brl(x) : ''; }
   var h = '<div class="ficha">' + campoFicha('Cliente', esc(p.Cliente)) + campoFicha('Nº do processo', esc(p.NumeroCNJ)) + campoFicha('Partes', esc(p.Partes)) + campoFicha('Vara', esc(p.Vara)) +
-    campoFicha('Área jurídica', esc(p.AreaJuridica)) + campoFicha('Advogado responsável', esc(p.AdvogadoResponsavel)) + campoFicha('Situação', badgeStatus(p.Situacao)) + campoFicha('Classificação', esc(p.Classificacao || 'Incluso')) +
+    campoFicha('Área jurídica', esc(p.AreaJuridica)) + campoFicha('Advogado responsável', esc(p.AdvogadoResponsavel)) + campoFicha('Situação', badgeStatus(p.Situacao)) +
     campoFicha('Início', p.DataInicio ? fmtD(p.DataInicio) : '') + campoFicha('Encerramento', p.DataEncerramento ? fmtD(p.DataEncerramento) : '') + '</div>' +
     '<div class="ficha-sec">Valores</div><div class="ficha">' + campoFicha('Valor da causa', v(p.ValorCausa)) + campoFicha('Condenação / acordo', v(p.CondenacaoAcordo)) + campoFicha('Valores recebidos', v(p.ValoresRecebidos)) + campoFicha('Saving', v(p.Saving)) + '</div>' +
     '<div class="ficha-sec">Andamento</div><p style="font-size:13px;margin:0">' + esc(p.SituacaoAtualizada || '—') + '</p>' +
     '<div class="btn-row" style="margin-top:16px"><button class="btn" onclick="editarProcesso(\'' + esc(p.ID) + '\')">' + ic('editar') + ' Editar processo</button><button class="btn ghost" onclick="fecharModal(\'md_ver\')">Fechar</button></div>';
   $('verTitulo').textContent = 'Processo ' + (p.NumeroCNJ || ''); $('verCorpo').innerHTML = h; abrirModal('md_ver');
 };
-window.novoProcesso = function () { limparProcesso(); abrirModal('md_pr'); };
+window.novoProcesso = function (cliente) { limparProcesso(); if (typeof cliente === 'string') { var f = pastas().filter(function (x) { return x.nome === cliente; })[0]; marcarCid('pr_Cliente', cliente, f && f.cli ? f.cli.ID : ''); } abrirModal('md_pr'); };
 window.editarProcesso = function (id) {
   var p = D.processos.filter(function (x) { return String(x.ID) === String(id); })[0]; if (!p) return;
   fecharModal('md_ver');
-  $('pr_ID').value = id; PR.forEach(function (k) { var e = $('pr_' + k); if (!e) return; var x = p[k] == null ? '' : p[k]; if (/^Data/.test(k)) x = isoData(x); else if (/^Valor|Condenacao|Saving/.test(k) && x !== '') x = moneyN(x).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); e.value = x; });
-  $('pr_Classificacao').value = p.Classificacao === 'Extra' ? 'Extra' : 'Incluso';
+  $('pr_ID').value = id; marcarCid('pr_Cliente', p.Cliente, p.ClienteID); PR.forEach(function (k) { if (k === 'Cliente') return; var e = $('pr_' + k); if (!e) return; var x = p[k] == null ? '' : p[k]; if (/^Data/.test(k)) x = isoData(x); else if (/^Valor|Condenacao|Saving/.test(k) && x !== '') x = moneyN(x).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); e.value = x; });
   $('prTitulo').textContent = 'Editar processo'; $('prBtn').textContent = 'Salvar alterações'; $('prCancel').style.display = 'none'; abrirModal('md_pr');
 };
 window.limparProcesso = function () {
-  $('pr_ID').value = ''; PR.forEach(function (k) { var e = $('pr_' + k); if (e && e.tagName !== 'SELECT') e.value = ''; });
-  $('pr_Situacao').value = 'Ativo'; $('pr_Classificacao').value = 'Incluso'; $('pr_AdvogadoResponsavel').value = '';
+  $('pr_ID').value = ''; PR.forEach(function (k) { var e = $('pr_' + k); if (e && e.tagName !== 'SELECT') e.value = ''; }); marcarCid('pr_Cliente', '', '');
+  $('pr_Situacao').value = 'Ativo'; $('pr_AdvogadoResponsavel').value = '';
   $('prTitulo').textContent = 'Novo processo'; $('prBtn').textContent = 'Registrar processo'; $('prCancel').style.display = 'none';
 };
 window.salvarProcesso = function () {
-  var o = {}; PR.forEach(function (k) { o[k] = $('pr_' + k).value; }); if ($('pr_ID').value) o.ID = $('pr_ID').value;
+  var o = {}; PR.forEach(function (k) { o[k] = $('pr_' + k).value; }); o.ClienteID = cidDe('pr_Cliente'); if ($('pr_ID').value) o.ID = $('pr_ID').value;
   acao('ctrlSalvarProcesso', [o], o.ID ? 'Processo atualizado.' : 'Processo registrado.').then(function () { fecharModal('md_pr'); limparProcesso(); }, function () {});
 };
 window.excluirProcesso = function (id) { if (confirm('Excluir este processo? (Se ele só terminou, prefira mudar a situação para "Arquivado".)')) acao('ctrlExcluirProcesso', [id], 'Processo excluído.'); };
@@ -295,7 +353,7 @@ window.renderCustas = function () {
       var st = c.Recebido ? 'Recebido' : c.Status === 'Sincronizado' ? 'Sincronizado' : 'Lançado';
       var stTxt = st === 'Lançado' ? '<span class="badge pend">aguardando sincronizar</span>' : st === 'Sincronizado' ? '<span class="badge info">no Receber de ' + mesNome(c.CobrancaEm) + '</span>' : '<span class="badge ok">cobrado · travado</span>';
       var id = esc(c.ID);
-      return '<tr><td>' + fmtD(c.Data) + '</td><td class="cliente">' + esc(c.Cliente) + '</td><td>' + esc(c.Descricao) + '<br><span class="muted">' + esc(c.Categoria) + (c.Cobravel !== 'Sim' ? ' · não cobrar' : '') + '</span>' + (/^https?:\/\//i.test(c.DocumentoLink || '') ? ' <a class="lnk" target="_blank" rel="noopener" href="' + esc(c.DocumentoLink) + '">comprovante</a>' : '') +
+      return '<tr><td>' + fmtD(c.Data) + '</td><td class="cliente">' + esc(c.Cliente) + (nomeRepetido(c.Cliente) && contratoPorId(c.ClienteID) ? '<br><span class="cp-tag">' + esc(contratoPorId(c.ClienteID)) + '</span>' : '') + '</td><td>' + esc(c.Descricao) + '<br><span class="muted">' + esc(c.Categoria) + (c.Cobravel !== 'Sim' ? ' · não cobrar' : '') + '</span>' + (/^https?:\/\//i.test(c.DocumentoLink || '') ? ' <a class="lnk" target="_blank" rel="noopener" href="' + esc(c.DocumentoLink) + '">comprovante</a>' : '') +
         '</td><td class="money">' + (moneyN(c.Valor) ? brl(c.Valor) : '<span class="muted">valor do contrato</span>') + '</td><td>' + stTxt + '</td><td class="acts">' +
         (st !== 'Recebido' ? acoes(null, "editarCusta('" + id + "')", "excluirCusta('" + id + "')") : '') + '</td></tr>';
     }).join('') + '</tbody></table>' + P.pager + '<div class="pager" style="justify-content:space-between"><b style="color:var(--ink)">Total a cobrar' + (mes ? ' em ' + mesNome(mes) : '') + '</b><b style="color:var(--ink)">' + brl(tot) + '</b></div>'
@@ -305,17 +363,17 @@ var CU = ['Cliente', 'ProcessoID', 'Categoria', 'Data', 'Valor', 'Cobravel', 'De
 window.novaCusta = function () { limparCusta(); abrirModal('md_cu'); };
 window.editarCusta = function (id) {
   var c = D.custas.filter(function (x) { return String(x.ID) === String(id); })[0]; if (!c) return;
-  $('cu_ID').value = id; $('cu_Cliente').value = c.Cliente; preencherSelProc('cu_ProcessoID', c.Cliente, c.ProcessoID);
+  $('cu_ID').value = id; marcarCid('cu_Cliente', c.Cliente, c.ClienteID); preencherSelProc('cu_ProcessoID', c.Cliente, c.ProcessoID);
   ['Categoria', 'Data', 'Cobravel', 'Descricao', 'DocumentoLink'].forEach(function (k) { $('cu_' + k).value = c[k] || ''; });
   $('cu_Data').value = isoData(c.Data); $('cu_Valor').value = moneyN(c.Valor) ? moneyN(c.Valor).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : '';
   $('cuTitulo').textContent = 'Editar lançamento'; $('cuBtn').textContent = 'Salvar alterações'; $('cuCancel').style.display = 'none'; abrirModal('md_cu');
 };
 window.limparCusta = function () {
-  $('cu_ID').value = ''; ['Cliente', 'Valor', 'Descricao', 'DocumentoLink'].forEach(function (k) { $('cu_' + k).value = ''; }); $('cu_Cobravel').value = 'Sim'; $('cu_Data').value = hoje(); preencherSelProc('cu_ProcessoID', '', '');
+  $('cu_ID').value = ''; ['Cliente', 'Valor', 'Descricao', 'DocumentoLink'].forEach(function (k) { $('cu_' + k).value = ''; }); $('cu_Cobravel').value = 'Sim'; $('cu_Data').value = hoje(); preencherSelProc('cu_ProcessoID', '', ''); marcarCid('cu_Cliente', '', '');
   $('cuTitulo').textContent = 'Nova custa / audiência'; $('cuBtn').textContent = 'Lançar'; $('cuCancel').style.display = 'none';
 };
 window.salvarCusta = function () {
-  var o = {}; CU.forEach(function (k) { o[k] = $('cu_' + k).value; }); var id = $('cu_ID').value;
+  var o = {}; CU.forEach(function (k) { o[k] = $('cu_' + k).value; }); o.ClienteID = cidDe('cu_Cliente'); var id = $('cu_ID').value;
   (id ? acao('ctrlEditarCusta', [id, o], 'Lançamento atualizado. Lembre de sincronizar.') : acao('ctrlLancarCusta', [o], o.Cobravel === 'Sim' ? 'Lançado. Vai para o Receber do mês seguinte quando você sincronizar.' : 'Lançado (sem cobrança).'))
     .then(function () { fecharModal('md_cu'); limparCusta(); }, function () {});
 };
@@ -347,7 +405,8 @@ function renderResumo() {
       return '<tr><td class="cliente">' + esc(c.cliente) + (c.cadastrado ? '' : ' <span class="badge late">fora do cadastro</span>') + (c.travado ? ' <span class="badge ok" title="O Financeiro já cobrou/recebeu esta cobrança">cobrado · travado</span>' : '') +
         '</td><td>' + hm(c.contratadas) + '</td><td>' + hm(c.consultivo) + ' <span class="muted">(' + c.tarefas + ')</span></td><td>' + (c.percentual != null ? c.percentual + '%' : '—') +
         '</td><td>' + (c.excedenteDec > 0 ? '<b style="color:var(--dh-laranja)">' + hm(c.excedente) + '</b>' : '—') + '</td><td>' + (c.horasProcessual ? hm(c.horasProcessual) : '—') +
-        '</td><td>' + (aud || '—') + '</td><td>' + (c.excessoProcessos || '—') + (c.processosContratados ? ' <span class="muted" title="processos contratados no contrato">(contr. ' + c.processosContratados + ')</span>' : '') +
+        '</td><td>' + (aud || '—') + '</td><td>' + (c.excessoProcessos || '—') + (c.excessoAutomatico ? ' <span class="muted" title="automático pela pasta de processos">(' + c.processosUsados + ' em uso / ' + c.processosContratados + ' contr.)</span>' : (c.processosContratados ? ' <span class="muted" title="processos contratados no contrato">(contr. ' + c.processosContratados + ')</span>' : '')) +
+        (c.semValorProcessoExtra ? '<br><span class="badge pend" title="O Financeiro precisa preencher o valor do processo extra no cadastro do cliente">sem valor no cadastro</span>' : '') +
         '</td><td class="money">' + (custas ? brl(custas) : '—') + '</td><td class="acts">' + (c.travado || !c.cadastrado ? '' : acoes(null, 'editarExtras(' + ix + ')', (c.horasProcessual || c.audienciasPlanilha || c.excessoProcessos || c.custasPlanilha) ? 'excluirExtras(' + ix + ')' : null)) + '</td></tr>';
     }).join('') + '</tbody></table>' + P.pager : vazio('Nada lançado em ' + mesNome(comp) + ' ainda. Suba a planilha ou inclua tarefas abaixo.')) +
     (semNada ? '<p class="example-note" style="margin:10px 0 0">' + semNada + ' cliente(s) com contrato mensal ainda sem nada lançado neste mês.</p>' : '');
@@ -442,13 +501,14 @@ var EX = ['HorasProcessual', 'Audiencias', 'DescricaoAudiencias', 'ExcessoProces
 window.editarExtras = function (ix) {
   var c = window._RL[ix]; if (!c) return;
   $('ex_Cliente').value = c.cliente; $('ex_HorasProcessual').value = c.horasProcessual ? String(c.horasProcessual).replace(/:00$/, '') : ''; $('ex_Audiencias').value = c.audienciasPlanilha || '';
-  $('ex_DescricaoAudiencias').value = c.descricaoAudiencias || ''; $('ex_ExcessoProcessos').value = c.excessoProcessos || '';
+  $('ex_DescricaoAudiencias').value = c.descricaoAudiencias || ''; $('ex_ExcessoProcessos').value = c.excessoPlanilha || '';
+  $('exProcAuto').style.display = c.excessoAutomatico ? 'block' : 'none';
   $('ex_Custas').value = c.custasPlanilha ? moneyN(c.custasPlanilha).toLocaleString('pt-BR', { minimumFractionDigits: 2 }) : ''; $('ex_DescricaoCustas').value = c.descricaoCustas || '';
   $('exTitulo').textContent = 'Extras de ' + c.cliente + ' em ' + mesNome(compSel()); abrirModal('md_ex');
 };
 window.novoExtras = function () { limparExtras(); $('exTitulo').textContent = 'Extras de um cliente em ' + mesNome(compSel()); abrirModal('md_ex'); };
 window.excluirExtras = function (ix) { var c = window._RL[ix]; if (!c || !confirm('Apagar os extras (horas processuais, audiências, processos e custas da planilha) de ' + c.cliente + ' em ' + mesNome(compSel()) + '?\n\nAs custas lançadas na tela de Custas continuam.')) return; acao('ctrlExcluirExtras', [compSel(), c.cliente], 'Extras apagados. Lembre de sincronizar.'); };
-window.limparExtras = function () { $('ex_Cliente').value = ''; EX.forEach(function (k) { $('ex_' + k).value = ''; }); $('exTitulo').textContent = 'Extras do cliente no mês'; $('exCard').classList.remove('editing'); };
+window.limparExtras = function () { $('exProcAuto').style.display = 'none'; $('ex_Cliente').value = ''; EX.forEach(function (k) { $('ex_' + k).value = ''; }); $('exTitulo').textContent = 'Extras do cliente no mês'; $('exCard').classList.remove('editing'); };
 window.salvarExtras = function () {
   var o = {}; EX.forEach(function (k) { o[k] = $('ex_' + k).value; });
   acao('ctrlSalvarExtras', [compSel(), $('ex_Cliente').value, o], 'Extras salvos. Lembre de sincronizar.').then(function () { fecharModal('md_ex'); limparExtras(); }, function () {});
@@ -552,15 +612,23 @@ function ed(k, v, tag, attrs) { tag = tag || 'span'; return '<' + tag + ' conten
 function pct(a, t) { return t > 0 ? Math.round(a / t * 100) : 0; }
 var CORES = ['#364B9B', '#23B9D6', '#141D3F', '#A9E3EF', '#F26A2E', '#2F8F5B', '#B3792A', '#7A8297'];
 function conic(vals) { var t = vals.reduce(function (s, v) { return s + v; }, 0) || 1, acc = 0; return 'conic-gradient(' + vals.map(function (v, i) { var a = acc; acc += v / t * 100; return CORES[i % CORES.length] + ' ' + a + '% ' + acc + '%'; }).join(',') + ')'; }
+// contratos do cliente escolhido: "Todos" ou um só (Assessoria mensal, DET, Pontual)
+function preencherContratosRA() {
+  var i = $('ra_Cliente'), s = $('ra_Contrato'), l = D.clientes.filter(function (c) { return norm(c.Nome) === norm(i.value); });
+  s.innerHTML = '<option value="">' + (l.length > 1 ? 'Todos os contratos (' + l.length + ')' : 'Todos os contratos') + '</option>' +
+    l.map(function (c) { return '<option value="' + esc(c.ID) + '">' + esc(rotuloContrato(c)) + (isAtivo(c) ? '' : ' (inativo)') + '</option>'; }).join('');
+  s.disabled = l.length < 2;
+}
+(function () { var i = $('ra_Cliente'); if (!i) return; ['input', 'blur', 'cid'].forEach(function (ev) { i.addEventListener(ev, function () { setTimeout(preencherContratosRA, ev === 'blur' ? 160 : 0); }); }); })();
 window.gerarRelatorio = function () {
   var cli = $('ra_Cliente').value; if (!cli) { toast('Escolha o cliente.', true); return; }
   $('raPrev').innerHTML = '<div class="card">Gerando…</div>';
-  call('ctrlRelatorioAnualDados', [cli, $('ra_De').value, $('ra_Ate').value]).then(function (d) { RA = d; renderRelatorio(d); }, function (e) { $('raPrev').innerHTML = ''; toast(e.message, true); });
+  call('ctrlRelatorioAnualDados', [cli, $('ra_De').value, $('ra_Ate').value, $('ra_Contrato').value]).then(function (d) { RA = d; renderRelatorio(d); }, function (e) { $('raPrev').innerHTML = ''; toast(e.message, true); });
 };
 function renderRelatorio(d) {
   var areas = Object.keys(d.processos.porArea), vals = areas.map(function (a) { return d.processos.porArea[a]; });
   var e = d.economia, gasto = Math.max(0, e.valorCausa - e.saving);
-  var h = '<div class="card"><div class="ra-head"><h2 style="margin:0"><span class="t">Pré-visualização: ' + ed('titulo', d.cliente + ' · ' + mesNome(d.de) + ' a ' + mesNome(d.ate)) + '</span></h2><span class="edit-badge">' + ic('editar', 13) + ' Editável</span></div>' +
+  var h = '<div class="card"><div class="ra-head"><h2 style="margin:0"><span class="t">Pré-visualização: ' + ed('titulo', d.cliente + (d.contrato ? ' · ' + d.contrato : '') + ' · ' + mesNome(d.de) + ' a ' + mesNome(d.ate)) + '</span></h2><span class="edit-badge">' + ic('editar', 13) + ' Editável</span></div>' +
     '<p class="example-note" style="margin-top:-6px">Clique em qualquer texto ou número para ajustar. O PowerPoint sai exatamente com o que estiver aqui.</p>';
   h += '<div class="ra-sec"><h3>Quantidade e situação de processos</h3><div class="ra-kpis">' +
     '<div class="stat"><div class="lb">Processos ativos</div>' + ed('pAtivos', d.processos.ativos, 'div', ' class="val"') + '</div>' +
