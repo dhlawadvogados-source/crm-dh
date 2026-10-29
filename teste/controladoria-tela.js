@@ -903,6 +903,7 @@ var RA_TEMAS = [
     prob: 'Alinhamento de demandas com a gestão', ori: 'Reuniões para priorizar demandas e esclarecer dúvidas da equipe', cuid: 'Manter uma reunião periódica de acompanhamento' }
 ];
 var RA_OUTROS = { k: 'Demandas gerais', prob: 'Demandas jurídicas do dia a dia da empresa', ori: 'Atendimento e orientação conforme cada demanda', cuid: 'Registrar as demandas para identificar as mais recorrentes' };
+function curto(s, n) { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1).replace(/\s+\S*$/, '') + '…' : s; }
 function minus1(s) { return String(s || '').replace(/^./, function (c) { return c.toLowerCase(); }); }
 function temaDe(t) { var n = norm(t); for (var i = 0; i < RA_TEMAS.length; i++) if (RA_TEMAS[i].re.test(n)) return RA_TEMAS[i]; return RA_OUTROS; }
 function porTema(tarefas) {
@@ -936,7 +937,7 @@ function analiseRiscos(d, areas, vals, tot) {
 function linhasConsultivo(d) {
   var g = porTema((d.tarefasDetalhe || []).filter(function (t) { return t.c; }));
   return g.slice(0, RA_CONS).map(function (x) {
-    return [x.T.k + ' (' + x.n + ' demanda' + (x.n > 1 ? 's' : '') + ', ' + decHm(x.h) + ')', x.T.prob + (x.exemplos.length ? '. Ex.: ' + x.exemplos.join('; ') : ''), x.T.ori, x.T.cuid];
+    return [x.T.k + ' (' + x.n + ' demanda' + (x.n > 1 ? 's' : '') + ', ' + decHm(x.h) + ')', x.T.prob + (x.exemplos.length ? '. Ex.: ' + x.exemplos.map(function (e) { return curto(e, 70); }).join('; ') : ''), x.T.ori, x.T.cuid];
   });
 }
 function motivoPico(d, pico) {
@@ -947,8 +948,8 @@ function motivoPico(d, pico) {
 }
 function entregasPorTema(d) {
   var c = porTema((d.tarefasDetalhe || []).filter(function (t) { return t.c; })), p = porTema((d.tarefasDetalhe || []).filter(function (t) { return !t.c; }));
-  var l = c.slice(0, 5).map(function (x) { return '• ' + x.T.k + ': ' + x.n + ' demanda' + (x.n > 1 ? 's' : '') + (x.exemplos.length ? ' (ex.: ' + x.exemplos[0] + ')' : ''); });
-  if (p.length) l.push('• Processual: ' + p.reduce(function (a, x) { return a + x.n; }, 0) + ' atos registrados' + (p[0].exemplos.length ? ' (ex.: ' + p[0].exemplos[0] + ')' : ''));
+  var l = c.slice(0, 5).map(function (x) { return '• ' + x.T.k + ': ' + x.n + ' demanda' + (x.n > 1 ? 's' : '') + (x.exemplos.length ? ' (ex.: ' + curto(x.exemplos[0], 55) + ')' : ''); });
+  if (p.length) l.push('• Processual: ' + p.reduce(function (a, x) { return a + x.n; }, 0) + ' atos registrados' + (p[0].exemplos.length ? ' (ex.: ' + curto(p[0].exemplos[0], 55) + ')' : ''));
   return l.join('\n');
 }
 function sugestoesPrioridades(d, areaTop, pctTop) {
@@ -1086,12 +1087,24 @@ function montarPptx(LOGO) {
     s.addText(lb.toUpperCase(), { x: x + 0.15, y: y + 0.18, w: w - 0.3, h: 0.36, fontFace: F, fontSize: w < 2 ? 7.5 : 8.5, bold: true, color: MUT, charSpacing: 1, valign: 'top' });
     s.addText(v, { x: x + 0.2, y: y + 0.6, w: w - 0.4, h: 0.65, fontFace: F, fontSize: sz || (v.length > 12 ? 18 : 26), bold: true, color: cor || BR, fit: 'shrink' });
   }
-  function texto(s, t, x, y, w, hh, sz, extra) { if (!t) return; s.addText(t, Object.assign({ x: x, y: y, w: w, h: hh, fontFace: F, fontSize: sz || 14, color: TX, valign: 'top', paraSpaceAfter: 6 }, extra || {})); }
+  // fonte que cabe na caixa (estimativa por caracteres: o PowerPoint não encolhe sozinho ao abrir)
+  function cabe(t, w, hh, sz, min) { sz = sz || 14; min = min || 9; t = String(t || '');
+    for (; sz > min; sz -= 0.5) { var cpl = Math.max(8, Math.floor(w * 72 / (sz * 0.56))), linhas = 0;
+      t.split('\n').forEach(function (par) { linhas += Math.max(1, Math.ceil(par.length / cpl)); });
+      if (linhas * sz * 1.32 <= hh * 72) break; }
+    return sz; }
+  function texto(s, t, x, y, w, hh, sz, extra) { if (!t) return; s.addText(t, Object.assign({ x: x, y: y, w: w, h: hh, fontFace: F, fontSize: cabe(t, w - 0.15, hh - 0.1, sz || 14), color: TX, valign: 'top', paraSpaceAfter: 4 }, extra || {})); }
   function rotulo(s, t, x, y, w) { s.addText(t.toUpperCase(), { x: x, y: y, w: w || 6, h: 0.3, fontFace: F, fontSize: 9.5, bold: true, color: CIANO, charSpacing: 1.5 }); }
+  // tabela longa vira mais de um slide (nada fica para fora)
+  function tabelaPaginada(num, cab, linhas, porSlide) {
+    for (var i = 0; i < linhas.length; i += porSlide) { var sl = base(num); tabela(sl, cab, linhas.slice(i, i + porSlide), 2.0); if (linhas.length > porSlide) sl.addText('continua', { x: 11.2, y: 6.65, w: 1.5, h: 0.3, fontFace: F, fontSize: 9, color: MUT, align: 'right' }); }
+  }
   function tabela(s, cab, linhas, y) {
+    var maxLen = 0; linhas.forEach(function (l) { l.forEach(function (c) { maxLen = Math.max(maxLen, String(c || '').length); }); });
+    var fs = maxLen > 170 ? 10.5 : maxLen > 110 ? 11.5 : 12.5;
     var rows = [cab.map(function (c) { return { text: c.toUpperCase(), options: { bold: true, color: CIANO, fill: { color: '0A1820' }, fontSize: 10 } }; })]
       .concat(linhas.map(function (l, i) { return l.map(function (c, j) { return { text: c || '', options: { color: j === 0 ? BR : TX, bold: j === 0, fill: { color: i % 2 ? '08141A' : '0C1D24' } } }; }); }));
-    s.addTable(rows, { x: 0.6, y: y, w: 12.13, fontFace: F, fontSize: 12.5, rowH: 0.55, border: { type: 'solid', color: '1E3A44', pt: 0.75 }, valign: 'middle', margin: 0.08 });
+    s.addTable(rows, { x: 0.6, y: y, w: 12.13, fontFace: F, fontSize: fs, rowH: 0.5, border: { type: 'solid', color: '1E3A44', pt: 0.75 }, valign: 'middle', margin: 0.08 });
   }
   var eixo = { catAxisLabelColor: MUT, valAxisLabelColor: MUT, valGridLine: { color: '1E3A44', size: 0.5 }, catAxisLineShow: false, valAxisLineShow: false, legendColor: TX, legendFontFace: F, catAxisLabelFontFace: F, valAxisLabelFontFace: F };
   // 1. capa (como a abertura do site)
@@ -1129,12 +1142,11 @@ function montarPptx(LOGO) {
   while (document.querySelector('#raPrev [data-k="area' + i + '"]')) { areas.push(val('area' + i)); nums.push(parseFloat(val('areaN' + i)) || 0); i++; }
   if (areas.length) s4.addChart(p.ChartType.doughnut, [{ name: 'Processos por área', labels: areas, values: nums }], Object.assign({ x: 0.5, y: 1.9, w: 6.0, h: 4.9, holeSize: 62, showLegend: true, legendPos: 'b', legendFontSize: 12, showPercent: true, dataLabelColor: 'FFFFFF', chartColors: [CIANO, '364B9B', '1E5C6B', 'A9E3EF', 'F59A5B', '3DCB8B', '7A8297'] }, eixo));
   card(s4, 6.9, 1.95, 5.85, 4.85);
-  texto(s4, val('riscoTxt'), 7.15, 2.15, 5.35, 1.6, 17, { bold: true, color: BR });
-  rotulo(s4, 'Fatores que originam as demandas', 7.15, 3.85, 5.3); texto(s4, val('riscoAnalise') || '—', 7.15, 4.2, 5.35, 2.4, 13);
+  texto(s4, val('riscoTxt'), 7.15, 2.15, 5.35, 1.35, 16, { bold: true, color: BR });
+  rotulo(s4, 'Fatores que originam as demandas', 7.15, 3.55, 5.3); texto(s4, val('riscoAnalise') || '—', 7.15, 3.9, 5.35, 2.8, 13);
   // 5. consultivo
   var linC = []; for (i = 0; i < RA_CONS; i++) { var r = [val('ct' + i + 'a'), val('ct' + i + 'b'), val('ct' + i + 'c'), val('ct' + i + 'd')]; if (r.some(Boolean)) linC.push(r); }
-  var s5 = base(5);
-  if (linC.length) tabela(s5, ['Tema', 'Problema enfrentado', 'Orientação prestada', 'Próximo cuidado recomendado'], linC, 2.0); else texto(s5, 'Sem consultorias registradas no período.', 0.6, 2.1, 12, 1, 14);
+  if (linC.length) tabelaPaginada(5, ['Tema', 'Problema enfrentado', 'Orientação prestada', 'Próximo cuidado recomendado'], linC, 3); else texto(base(5), 'Sem consultorias registradas no período.', 0.6, 2.1, 12, 1, 14);
   // 6. dedicação
   var s6 = base(6);
   var labs = d.horas.meses.map(function (m) { return mesNome(m.mes); });
@@ -1145,14 +1157,13 @@ function montarPptx(LOGO) {
   rotulo(s6, 'Principais entregas', 8.1, 5.15, 4.6); texto(s6, val('entregas'), 8.1, 5.5, 4.65, 1.5, 11);
   // 7. prioridades
   var linP = []; for (i = 0; i < RA_PRI; i++) { var q = [val('pr' + i + 'a'), val('pr' + i + 'b'), val('pr' + i + 'c'), val('pr' + i + 'd')]; if (q.some(Boolean)) linP.push(q); }
-  var s7 = base(7);
-  if (linP.length) tabela(s7, ['Prioridade', 'Medida recomendada', 'Responsável', 'Indicador de acompanhamento'], linP, 2.0);
+  if (linP.length) tabelaPaginada(7, ['Prioridade', 'Medida recomendada', 'Responsável', 'Indicador de acompanhamento'], linP, 4); else base(7);
   // 8. encerramento (como o "próximo passo" do site)
   var s8 = p.addSlide(); fundo(s8); nSlide++;
   logo(s8, 5.9, 0.7, 1.55);
   s8.addText(('08  ·  ' + T[8][0]).toUpperCase(), { x: 0.6, y: 1.75, w: 12.1, h: 0.34, fontFace: F, fontSize: 10, bold: true, color: CIANO, charSpacing: 2, align: 'center' });
   s8.addText([{ text: T[8][1] + ' ', options: { color: BR } }, { text: T[8][2], options: { color: CIANO } }], { x: 0.6, y: 2.1, w: 12.1, h: 0.9, fontFace: F, fontSize: 32, bold: true, align: 'center' });
-  s8.addText(val('encerra'), { x: 1.4, y: 3.15, w: 10.5, h: 2.1, fontFace: F, fontSize: 15, color: TX, align: 'center', valign: 'top', fit: 'shrink' });
+  s8.addText(val('encerra'), { x: 1.4, y: 3.15, w: 10.5, h: 2.1, fontFace: F, fontSize: cabe(val('encerra'), 10.3, 2.0, 15), color: TX, align: 'center', valign: 'top', fit: 'shrink' });
   if (val('proxCiclo')) { s8.addShape(p.ShapeType.roundRect, { x: 2.6, y: 5.5, w: 8.1, h: 0.75, rectRadius: 0.37, fill: { color: CIANO } }); s8.addText(val('proxCiclo'), { x: 2.7, y: 5.5, w: 7.9, h: 0.75, fontFace: F, fontSize: 12.5, bold: true, color: '031014', align: 'center', valign: 'middle', fit: 'shrink' }); }
   s8.addText('Domingues & Herold Advogados  ·  dhlaw.com.br', { x: 0.6, y: 6.85, w: 12.1, h: 0.3, fontFace: F, fontSize: 9.5, color: MUT, align: 'center' });
   var nome = 'Relatorio_Gestao_Juridica_' + d.cliente.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_') + '_' + d.de + '_a_' + d.ate + '.pptx';
