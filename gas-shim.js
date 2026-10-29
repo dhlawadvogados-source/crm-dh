@@ -18,7 +18,13 @@
 
   var CFG = window.CRM_CONFIG || {};
   var SHEET_ID = String(CFG.SPREADSHEET_ID || '').trim();
-  var SCOPES = 'https://www.googleapis.com/auth/spreadsheets openid email';
+  // CONTROLADORIA: quando BACKEND_API estiver preenchido em config.js, o navegador NÃO fala mais
+  // com a planilha: só faz o login e manda cada ação para o servidor (Cloud Function), que confere
+  // o perfil da pessoa (aba Usuarios) antes de ler/gravar. Sem BACKEND_API, tudo funciona como antes.
+  var BACKEND_API = String(CFG.BACKEND_API || '').trim();
+  var SERVER_MODE = !!window.CRM_SERVER_MODE;      // este mesmo arquivo rodando DENTRO do servidor
+  var CLIENT_MODE = !!BACKEND_API && !SERVER_MODE; // navegador conversando com o servidor
+  var SCOPES = CLIENT_MODE ? 'openid email' : 'https://www.googleapis.com/auth/spreadsheets openid email';
   var STALE_MS = (CFG.RECARREGAR_APOS_SEGUNDOS || 20) * 1000;
   var BACKEND_URL = CFG.BACKEND_URL || 'codigo.js';
   var H2C_LIB = 'https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js';
@@ -453,7 +459,8 @@
     };
   }
   var Logger = { log: function () { console.log.apply(console, ['[CRM]'].concat([].slice.call(arguments))); } };
-  var MailApp = { sendEmail: notAvailable('Enviar e-mail'), getRemainingDailyQuota: function () { return 0; } };
+  // no servidor, o e-mail é enviado de verdade (window.CRM_MAILAPP); no navegador continua indisponível
+  var MailApp = window.CRM_MAILAPP || { sendEmail: notAvailable('Enviar e-mail'), getRemainingDailyQuota: function () { return 0; } };
   var GmailApp = { sendEmail: notAvailable('Enviar e-mail') };
   var ScriptApp = { getProjectTriggers: function () { return []; }, deleteTrigger: function () {}, newTrigger: notAvailable('Criar gatilho') };
   var HtmlService = { createHtmlOutput: notAvailable('HtmlService'), createHtmlOutputFromFile: notAvailable('HtmlService'), createTemplateFromFile: notAvailable('HtmlService') };
@@ -535,6 +542,7 @@
   }
 
   function reload() {
+    if (CLIENT_MODE) return backendCall('ctrlRecarregar', []);
     UI.status('Carregando dados da planilha...');
     return Transport.load().then(function (json) { buildModel(json); UI.status(''); });
   }
@@ -557,7 +565,7 @@
           if (resp.error) { UI.loginError('O Google recusou o login: ' + resp.error); return; }
           // o Google deixa a pessoa desmarcar a permissão da planilha; sem ela o CRM não funciona
           try {
-            if (google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(resp, 'https://www.googleapis.com/auth/spreadsheets')) {
+            if (!CLIENT_MODE && google.accounts.oauth2.hasGrantedAllScopes && !google.accounts.oauth2.hasGrantedAllScopes(resp, 'https://www.googleapis.com/auth/spreadsheets')) {
               needConsent = true;
               UI.loginError('Faltou liberar o acesso às planilhas. Clique em "Entrar com Google" de novo e, na tela de permissões, MARQUE a caixa "Ver, editar, criar e excluir todas as suas planilhas".');
               return;
@@ -600,6 +608,7 @@
   var readyPromise = null;
   function ready() {
     if (readyPromise) return readyPromise;
+    if (CLIENT_MODE) return (readyPromise = readyClient());
     readyPromise = Promise.resolve().then(function () {
       if (!window.CRM_TRANSPORT && (!CFG.GOOGLE_CLIENT_ID || /COLE_AQUI/.test(CFG.GOOGLE_CLIENT_ID))) throw new Error('CONFIG: falta o GOOGLE_CLIENT_ID em js/config.js (veja o LEIA-ME).');
       if (!SHEET_ID) throw new Error('CONFIG: falta o SPREADSHEET_ID em js/config.js.');
@@ -609,7 +618,7 @@
     }).then(function (email) {
       USER.email = String(email || '').toLowerCase();
       try { localStorage.setItem('crm_dh_email', USER.email); } catch (e) {}
-      var allowed = BACKEND('ALLOWED_EMAILS');
+      var allowed = SERVER_MODE ? null : BACKEND('ALLOWED_EMAILS'); // no servidor, quem confere é a aba Usuarios
       if (Array.isArray(allowed) && allowed.length && !allowed.some(function (x) { return String(x || '').trim().toLowerCase() === USER.email; })) {
         UI.denied(USER.email);
         throw new Error('Acesso restrito');
@@ -625,6 +634,60 @@
   }
 
   /* =========================================================
+   * MODO CLIENTE DO SERVIDOR (Controladoria): login -> pergunta ao
+   * servidor quem é a pessoa e qual o perfil -> libera a tela.
+   * ========================================================= */
+  function isPage(p) {
+    var a = String(location.pathname || '').split('/').pop() || 'index.html';
+    return a === String(p).split('/').pop();
+  }
+  function readyClient() {
+    return Promise.resolve().then(function () {
+      if (!CFG.GOOGLE_CLIENT_ID || /COLE_AQUI/.test(CFG.GOOGLE_CLIENT_ID)) throw new Error('CONFIG: falta o GOOGLE_CLIENT_ID em config.js (veja o LEIA-ME).');
+      return backendCall('ctrlQuemSou', []);
+    }).then(function (res) {
+      if (!res || !res.success) throw new Error((res && res.error) || 'O servidor não confirmou o seu acesso.');
+      var me = res.data || {};
+      USER.email = String(me.email || '').toLowerCase();
+      window.CRM_PERFIL = me;
+      try { localStorage.setItem('crm_dh_email', USER.email); } catch (e) {}
+      // Controladoria só usa a tela dela; se abrir o CRM financeiro, vai direto para lá.
+      var pg = CFG.PAGINA_CONTROLADORIA || 'controladoria.html';
+      if (me.perfil === 'Controladoria' && !isPage(pg)) { location.replace(pg); return new Promise(function () {}); }
+      UI.loggedIn(USER.email);
+      try { document.dispatchEvent(new CustomEvent('crm:perfil', { detail: me })); } catch (e) {}
+    }).catch(function (e) {
+      readyPromise = null;
+      if (e && e.semAcesso) { UI.denied(e.email || USER.email); throw new Error('Acesso restrito'); }
+      UI.fatal(e.message);
+      throw e;
+    });
+  }
+  function backendCall(name, args, retried) {
+    return Auth.token().then(function (tok) {
+      return fetch(BACKEND_API, {
+        method: 'POST',
+        headers: { 'Authorization': 'Bearer ' + tok, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fn: name, args: args || [] })
+      });
+    }).then(function (r) {
+      if (r.status === 401 && !retried) { Auth.invalidate(); return backendCall(name, args, true); }
+      return r.text().then(function (t) {
+        var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) {}
+        if (r.status === 403 && j && j.codigo === 'SEM_ACESSO') {
+          var e1 = new Error('Acesso restrito'); e1.semAcesso = true; e1.email = j.email; throw e1;
+        }
+        if (!r.ok || !j) throw new Error((j && j.erro) || ('O servidor do CRM respondeu ' + r.status + '.'));
+        if (j.gravou) UI.saving(Promise.resolve());
+        return j.resultado;
+      });
+    }, function (e) {
+      if (e && (e.semAcesso || /Acesso restrito/.test(e.message))) throw e;
+      throw new Error('Não consegui falar com o servidor do CRM (' + (e && e.message || e) + '). Confira a internet e tente de novo.');
+    });
+  }
+
+  /* =========================================================
    * Execução das funções (substitui o servidor do Apps Script)
    * ========================================================= */
   var chain = Promise.resolve();
@@ -634,6 +697,10 @@
     return p;
   }
   function exec(name, args) {
+    if (CLIENT_MODE) {
+      return ready().then(function () { return backendCall(name, JSON.parse(JSON.stringify(args || []))); })
+        .then(resolvePdfs);
+    }
     return ready().then(function () {
       if (Date.now() - (SS._loadedAt || 0) > STALE_MS) return reload();
     }).then(function () {
@@ -664,6 +731,49 @@
       document.head.appendChild(s);
     });
   }
+  function pdfV2(win, doc, body, fullH, W, PAGE_H, SCALE) {
+    var MT = 36, MB = 28;
+    function rr(el) { var r = el.getBoundingClientRect(); return { t: Math.round(r.top), b: Math.round(r.bottom) }; }
+    var cuts = [], evitar = [], titulos = [], tabelas = [];
+    [].forEach.call(body.querySelectorAll('tr,p,li,table,img,div'), function (el) { var r = rr(el); if (r.b > r.t) { cuts.push(r.t); cuts.push(r.b); } });
+    [].forEach.call(body.querySelectorAll('[data-nobreak]'), function (el) { evitar.push(rr(el)); });
+    [].forEach.call(body.querySelectorAll('[data-keepnext]'), function (el) { var r = rr(el); titulos.push({ t: r.t, b: r.b + 70 }); });
+    [].forEach.call(body.querySelectorAll('table'), function (tb) { var th = tb.querySelector('thead'); if (!th) return; var r = rr(tb), h = rr(th); tabelas.push({ t: r.t, b: r.b, ht: h.t, hb: h.b }); });
+    cuts = cuts.filter(function (c) {
+      for (var i = 0; i < evitar.length; i++) if (c > evitar[i].t && c < evitar[i].b) return false;
+      for (var j = 0; j < titulos.length; j++) if (c > titulos[j].t && c <= titulos[j].b) return false;
+      return true;
+    }).sort(function (a, b) { return a - b; });
+    function tabelaEm(y) { for (var i = 0; i < tabelas.length; i++) if (y > tabelas[i].hb && y < tabelas[i].b - 2) return tabelas[i]; return null; }
+    var slices = [], y = 0, pg = 0;
+    while (y < fullH - 2) {
+      var tb = pg > 0 ? tabelaEm(y) : null, cab = tb ? tb.hb - tb.ht : 0;
+      var avail = PAGE_H - (pg > 0 ? MT : 0) - MB - cab, lim = y + avail, end;
+      if (lim < fullH) {
+        var best = -1;
+        for (var i = 0; i < cuts.length; i++) { var c = cuts[i]; if (c > y + avail * 0.45 && c <= lim) best = c; }
+        end = best > 0 ? best : lim;
+      } else end = fullH;
+      slices.push({ y0: y, y1: end, tb: tb, top: pg > 0 ? MT : 0 }); y = end; pg++;
+    }
+    return win.html2canvas(body, { scale: SCALE, backgroundColor: '#ffffff', useCORS: true, width: W, windowWidth: W, height: fullH, windowHeight: fullH, logging: false })
+      .then(function (canvas) {
+        var JsPDF = window.jspdf.jsPDF;
+        var pdf = new JsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+        var pw = pdf.internal.pageSize.getWidth(), k = pw / W;
+        slices.forEach(function (sl, idx) {
+          var h = sl.y1 - sl.y0, cab = sl.tb ? sl.tb.hb - sl.tb.ht : 0;
+          var part = document.createElement('canvas');
+          part.width = canvas.width; part.height = Math.max(1, Math.round((h + cab) * SCALE));
+          var ctx = part.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, part.width, part.height);
+          if (cab) ctx.drawImage(canvas, 0, Math.round(sl.tb.ht * SCALE), canvas.width, Math.round(cab * SCALE), 0, 0, part.width, Math.round(cab * SCALE));
+          ctx.drawImage(canvas, 0, Math.round(sl.y0 * SCALE), canvas.width, Math.round(h * SCALE), 0, Math.round(cab * SCALE), part.width, Math.round(h * SCALE));
+          if (idx > 0) pdf.addPage();
+          pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, sl.top * k, pw, (h + cab) * k);
+        });
+        return String(pdf.output('datauristring')).split(',')[1];
+      });
+  }
   // O relatório é desenhado num iframe isolado (sem o CSS do CRM), fotografado com
   // html2canvas e fatiado em páginas A4 sem cortar linhas de tabela no meio.
   var jsPdfP = null;
@@ -692,6 +802,9 @@
       var body = doc.body;
       var fullH = Math.max(doc.documentElement.scrollHeight, body.scrollHeight, 1);
       fr.style.height = fullH + 'px';
+      // Relatórios novos (body data-pdf="v2"): margens nas páginas seguintes, blocos que não podem ser cortados
+      // (data-nobreak), título que não fica sozinho no fim da página (data-keepnext) e cabeçalho da tabela repetido.
+      if (body.getAttribute('data-pdf') === 'v2') return pdfV2(win, doc, body, fullH, W, PAGE_H, SCALE);
       // pontos onde dá para quebrar a página (fim de linhas, parágrafos, blocos)
       var cuts = [];
       [].forEach.call(body.querySelectorAll('tr,p,li,h1,h2,h3,h4,table,img,div'), function (el) {
@@ -739,14 +852,16 @@
     var jobs = [];
     (function walk(o, parent, key) {
       if (typeof o === 'string' && PDF_JOBS[o] !== undefined) { jobs.push({ p: parent, k: key, html: PDF_JOBS[o], id: o }); return; }
+      // vindo do servidor: o PDF chega como HTML e é desenhado aqui no navegador
+      if (CLIENT_MODE && o && typeof o === 'object' && typeof o.__pdfHtml === 'string' && parent) { jobs.push({ p: parent, k: key, html: o.__pdfHtml, id: null }); return; }
       if (o && typeof o === 'object') for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) walk(o[k], o, k);
     })(obj, null, null);
     if (!jobs.length) return Promise.resolve(obj);
     UI.status('Gerando PDF...');
     return jobs.reduce(function (p, j) {
       return p.then(function () {
-        return htmlToPdfBase64(j.html).then(function (b64) { j.p[j.k] = b64; delete PDF_JOBS[j.id]; }, function (e) {
-          delete PDF_JOBS[j.id];
+        return htmlToPdfBase64(j.html).then(function (b64) { j.p[j.k] = b64; if (j.id) delete PDF_JOBS[j.id]; }, function (e) {
+          if (j.id) delete PDF_JOBS[j.id];
           var baixou = downloadHtmlFallback(j.html);
           throw new Error('Não consegui gerar o PDF (' + (e && e.message || e) + ').' + (baixou ? ' Baixei o relatório em HTML: abra o arquivo e use Imprimir > Salvar como PDF.' : ''));
         });
@@ -799,16 +914,18 @@
       var sw = $('lgSwitch'); if (sw) sw.onclick = function (e) { e.preventDefault(); Auth.signOut(); };
       var out = $('btnSair'); if (out) out.onclick = function (e) { e.preventDefault(); if (confirm('Sair da conta Google neste CRM?')) Auth.signOut(); };
     }
+    function ensure() { if (!gate && document.getElementById('loginGate')) init(); } // a tela pode ainda não ter terminado de carregar
     function show(mode) {
+      ensure();
       if (!gate) return;
-      gate.className = 'lg-gate on ' + (mode || '');
+      gate.className = 'lg-gate' + (/\blx\b/.test(gate.className || '') ? ' lx' : '') + ' on ' + (mode || '');
       document.body.classList.add('lg-open');
     }
-    function hide() { if (gate) { gate.className = 'lg-gate'; document.body.classList.remove('lg-open'); } }
+    function hide() { ensure(); if (gate) { gate.className = 'lg-gate' + (/\blx\b/.test(gate.className || '') ? ' lx' : ''); document.body.classList.remove('lg-open'); } }
     return {
       init: init,
       askLogin: function (expired) {
-        if (!gate) return;
+        ensure(); if (!gate) return;
         msgEl.textContent = expired ? 'Sua sessão do Google expirou. Entre de novo para continuar de onde parou.' : 'Entre com a sua conta Google autorizada para acessar o CRM.';
         btn.style.display = ''; show('ask');
       },
@@ -818,7 +935,7 @@
         var w = $('who'); if (w) w.textContent = email;
       },
       denied: function (email) {
-        if (!gate) return;
+        ensure(); if (!gate) return;
         msgEl.innerHTML = 'Esta ferramenta é privada da DH LAW.<br>Conta identificada: <b>' + (email || 'não identificada') + '</b>';
         btn.style.display = 'none'; show('denied');
       },
@@ -847,5 +964,9 @@
   else { UI.init(); ready().catch(function () {}); }
 
   // Para testes/diagnóstico no console do navegador
-  window.CRM_SHIM = { ready: ready, reload: reload, run: runServer, model: SS, auth: Auth, _pending: function () { return PENDING; } };
+  window.CRM_SHIM = { ready: ready, reload: reload, run: runServer, model: SS, auth: Auth, _pending: function () { return PENDING; },
+    modoCliente: CLIENT_MODE,
+    // usados só pelo servidor (modo servidor): define quem está fazendo a ação e força reler a planilha
+    asUser: function (email) { USER.email = String(email || '').trim().toLowerCase(); },
+    invalidate: function () { SS._loadedAt = 0; } };
 })();

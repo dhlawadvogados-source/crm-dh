@@ -1955,81 +1955,92 @@ function splitAud_(txt){
   return parts.map(function(s){return s.trim();}).filter(Boolean);
 }
 function buildRelatorioClienteHtml_(d){
+  // Relatório mensal do cliente no visual da DH LAW: cabeçalho escuro com a logo, números em destaque e tabelas limpas.
   var mi=parseInt(d.mes.split("-")[1],10)-1, ano=d.mes.split("-")[0];
-  var periodo=(MESES_PT_LONG[mi]||"")+" "+ano;
-  var css="font-family:Arial,Helvetica,sans-serif;color:#20293f;";
-  var h="<html><head><meta charset='utf-8'></head><body style='margin:0;background:#fff;"+css+"'>";
-  h+="<div style='padding:22px 40px 6px;text-align:right'><img src='"+LOGO_B64+"' style='height:60px'></div>";
-  h+="<div style='text-align:center;margin-top:6px'><div style='font-size:19px;font-weight:bold;text-decoration:underline'>RELATÓRIO MENSAL</div><div style='font-size:15px;font-weight:bold;margin-top:4px'>Período: "+periodo+"</div></div>";
-  h+="<hr style='border:none;border-top:1px solid #cfd4de;margin:14px 40px'>";
-  h+="<div style='padding:4px 40px 30px'>";
-  h+="<p style='font-size:13px'><b style='text-decoration:underline'>CLIENTE:</b> "+d.cliente+"</p>";
-  // resumo contrato
-  h+="<p style='font-size:13px'><b style='text-decoration:underline'>RESUMO CONTRATO:</b></p><ul style='font-size:13px;margin-top:-6px'>";
-  h+="<li><b>Audiências</b>: "+(d.vAudiencia>0?("R$ "+brl2_(d.vAudiencia)+" por audiência realizada"):"sem previsão de cobrança por audiência realizada")+"</li>";
-  h+="<li><b>Consultivo</b>: "+Math.round(d.contratadas)+"h/mês (caso seja excedido, cobrar R$ "+brl2_(d.vHoraExtra)+" por hora trabalhada)</li>";
-  if(d.procContratados>0) h+="<li><b>Processos judiciais</b>: "+d.procContratados+" ativos (acima de "+d.procContratados+", cobrar R$ "+brl2_(d.vProcExtra)+" por novo processo por mês)</li>";
-  h+="</ul>";
-  // controle de horas
-  h+="<div style='font-size:15px;font-weight:bold;text-decoration:underline;margin:22px 0 10px'>CONTROLE DE HORAS UTILIZADAS</div>";
-  function rowH(lb,val){ return "<tr><td style='background:#2e75b6;color:#fff;font-weight:bold;font-size:12px;padding:7px 12px;border:1px solid #b7c7dd;width:270px'>"+lb+"</td><td style='font-size:13px;padding:7px 12px;border:1px solid #b7c7dd'>"+val+"</td></tr>"; }
-  h+="<table style='border-collapse:collapse'>"+
-     rowH("Horas Contratadas",decToHMS_(d.contratadas))+
-     rowH("Horas Utilizadas - Consultivo",decToHMS_(d.consDec))+
-     rowH("Horas Utilizadas - Processual",decToHMS_(d.procDec))+
-     rowH("Horas extras",decToHMS_(d.excHoras))+
-     rowH("Cobrança horas extras",d.cobrExtras>0?("R$ "+brl2_(d.cobrExtras)):"-")+
-     rowH("Custas",d.custas>0?("R$ "+brl2_(d.custas)):"-")+
-     "</table>";
-  if(d.excHoras>0) h+="<p style='font-size:13px;margin:10px 0 0'>Neste mês o consultivo <b>extrapolou em "+decToHMS_(d.excHoras)+"</b> além das "+decToHMS_(d.contratadas)+" contratadas ("+decToHMS_(d.consDec)+" utilizadas), gerando cobrança de horas extras de <b>R$ "+brl2_(d.cobrExtras)+"</b>.</p>";
-  // time sheet consultivo
+  var mesCap=function(i){ var n=MESES_PT_LONG[(i+12)%12]||""; return n.charAt(0)+n.slice(1).toLowerCase(); };
+  var compAno = mi===0 ? String(+ano-1) : ano;
+  var periodo=mesCap(mi)+" de "+ano, competencia=mesCap(mi-1)+" de "+compAno;
+  var NAVY="#141D3F", AZUL="#364B9B", CIANO="#23B9D6", TX="#20293F", MUT="#6B7390", LINHA="#E3E7F0";
+  function esc(s){ return String(s==null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+  function nomeResp(r){ r=String(r||"").trim(); if(r.indexOf("@")<0) return esc(r); var p=r.split("@")[0].split(/[._-]+/).filter(Boolean); return esc(p.map(function(x){ return x.charAt(0).toUpperCase()+x.slice(1); }).join(" ")); }
+  function hm(dec){ var t=Math.round((dec||0)*60), h=Math.floor(t/60), m=t%60; return h+"h"+(m<10?"0":"")+m; }
+  function titulo(t, sub){ return "<div data-keepnext='1' style='margin:26px 0 10px'><div style='font-size:9.5px;font-weight:bold;letter-spacing:1.6px;color:"+CIANO+";text-transform:uppercase'>"+(sub||"")+"</div><div style='font-size:17px;font-weight:bold;color:"+NAVY+";margin-top:2px'>"+t+"</div></div>"; }
+  function kpi(lb, val, cor, hint){ return "<td style='width:25%;padding:0 5px;vertical-align:top'><div style='border:1px solid "+LINHA+";border-top:3px solid "+(cor||CIANO)+";border-radius:8px;padding:11px 12px;background:#fff'>"+
+    "<div style='font-size:8.5px;font-weight:bold;letter-spacing:.6px;color:"+MUT+";text-transform:uppercase'>"+lb+"</div><div style='font-size:20px;font-weight:bold;color:"+(cor===CIANO?NAVY:cor||NAVY)+";margin-top:4px'>"+val+"</div>"+(hint?"<div style='font-size:9.5px;color:"+MUT+";margin-top:2px'>"+hint+"</div>":"")+"</div></td>"; }
+  var css="font-family:Arial,Helvetica,sans-serif;color:"+TX+";";
+  var h="<html><head><meta charset='utf-8'></head><body data-pdf='v2' style='margin:0;background:#fff;"+css+"'>";
+  // cabeçalho
+  h+="<div style='background:"+NAVY+";padding:26px 40px 24px;border-bottom:4px solid "+CIANO+"'><table style='width:100%;border-collapse:collapse'><tr>"+
+     "<td style='vertical-align:middle'><div style='font-size:10px;font-weight:bold;letter-spacing:2.2px;color:"+CIANO+"'>RELATÓRIO MENSAL DE ATIVIDADES</div>"+
+     "<div style='font-size:24px;font-weight:bold;color:#fff;margin-top:6px'>"+esc(d.cliente)+"</div>"+
+     "<div style='font-size:12px;color:#C9D1EA;margin-top:6px'>Cobrança de <b style='color:#fff'>"+periodo+"</b> &nbsp;·&nbsp; atividades de "+competencia+"</div></td>"+
+     "<td style='width:120px;text-align:right;vertical-align:middle'><img src='"+LOGO_B64+"' style='height:58px'></td></tr></table></div>";
+  h+="<div style='padding:6px 40px 10px'>";
+  // números do mês
+  var pct = d.contratadas>0 ? Math.round(d.consDec/d.contratadas*100) : 0;
+  h+=titulo("O mês em números","Resumo");
+  h+="<table data-nobreak='1' style='width:100%;border-collapse:separate;margin:0 -5px'><tr>"+
+     kpi("Horas contratadas", d.contratadas>0?hm(d.contratadas):"—", AZUL, "por mês")+
+     kpi("Consultivo utilizado", hm(d.consDec), CIANO, d.contratadas>0?pct+"% do pacote":(d.tarefas.length+" tarefa(s)"))+
+     kpi("Processual", hm(d.procDec), CIANO, "horas registradas")+
+     kpi("Horas excedentes", d.excHoras>0?hm(d.excHoras):"0h00", d.excHoras>0?"#D4561C":"#2F8F5B", d.excHoras>0?"acima do contratado":"dentro do pacote")+
+     "</tr></table>";
+  if(d.contratadas>0){
+    var w=Math.min(100,pct), wx=pct>100?Math.min(100,pct-100):0;
+    h+="<div style='margin:14px 0 0'><div style='height:10px;background:#EEF1FA;border-radius:6px;overflow:hidden'><div style='height:10px;width:"+w+"%;background:"+(pct>100?"#D4561C":CIANO)+"'></div></div>"+
+       "<div style='font-size:10.5px;color:"+MUT+";margin-top:5px'>"+(pct>100?"O consultivo passou o pacote em <b style='color:#D4561C'>"+hm(d.excHoras)+"</b> ("+hm(d.consDec)+" de "+hm(d.contratadas)+" contratadas).":"Foram usadas "+hm(d.consDec)+" das "+hm(d.contratadas)+" contratadas no mês.")+"</div></div>";
+  }
+  // contrato
+  h+="<div data-nobreak='1'>"+titulo("Seu contrato","Condições");
+  h+="<table style='width:100%;border-collapse:collapse;font-size:11.5px'>";
+  function linhaC(a,b){ return "<tr><td style='padding:7px 10px;border-bottom:1px solid "+LINHA+";color:"+MUT+";width:34%'>"+a+"</td><td style='padding:7px 10px;border-bottom:1px solid "+LINHA+"'>"+b+"</td></tr>"; }
+  h+=linhaC("Consultivo", (d.contratadas>0?Math.round(d.contratadas)+"h por mês":"sob demanda")+(d.vHoraExtra>0?" · hora excedente: <b>R$ "+brl2_(d.vHoraExtra)+"</b>":""));
+  if(d.procContratados>0) h+=linhaC("Processos judiciais", d.procContratados+" processos ativos inclusos"+(d.vProcExtra>0?" · processo excedente: <b>R$ "+brl2_(d.vProcExtra)+"</b> por mês":""));
+  h+=linhaC("Audiências", d.vAudiencia>0?"<b>R$ "+brl2_(d.vAudiencia)+"</b> por audiência realizada":"sem cobrança por audiência");
+  h+="</table></div>";
+  // time sheet
   if(d.tarefas.length){
-    h+="<div style='font-size:14px;font-weight:bold;text-decoration:underline;margin:24px 0 8px'>TIME SHEET CONSULTIVO</div>";
+    h+=titulo("Atividades de consultivo","Time sheet · "+competencia);
     h+="<table style='border-collapse:collapse;width:100%;table-layout:fixed'><thead><tr>"+
-       "<th style='background:#364B9B;color:#fff;font-size:10px;padding:6px 8px;text-align:left;border:1px solid #364B9B'>Tarefa</th>"+
-       "<th style='background:#364B9B;color:#fff;font-size:10px;padding:6px 6px;border:1px solid #364B9B;width:72px'>Data</th>"+
-       "<th style='background:#364B9B;color:#fff;font-size:10px;padding:6px 6px;border:1px solid #364B9B;width:66px'>Duração</th>"+
-       "<th style='background:#364B9B;color:#fff;font-size:10px;padding:6px 8px;border:1px solid #364B9B;width:150px'>Responsável</th></tr></thead><tbody>";
-    d.tarefas.forEach(function(t,ix){ var bg=(ix%2)?"#f6f7f9":"#fff"; h+="<tr style='background:"+bg+"'><td style='font-size:10.5px;padding:5px 8px;border:1px solid #e2e2e2;word-wrap:break-word'>"+t.tarefa+"</td><td style='font-size:10.5px;padding:5px 6px;border:1px solid #e2e2e2;text-align:center;white-space:nowrap'>"+fmtDataBr_(t.data)+"</td><td style='font-size:10.5px;padding:5px 6px;border:1px solid #e2e2e2;text-align:center;white-space:nowrap'>"+t.dur+"</td><td style='font-size:10.5px;padding:5px 8px;border:1px solid #e2e2e2;word-wrap:break-word'>"+t.resp+"</td></tr>"; });
-    h+="<tr style='background:#eef1f6'><td colspan='2' style='font-size:11px;font-weight:bold;padding:6px 8px;border:1px solid #e2e2e2;text-align:right'>TOTAL CONSULTIVO</td><td style='font-size:11px;font-weight:bold;padding:6px 6px;border:1px solid #e2e2e2;text-align:center;white-space:nowrap'>"+decToHMS_(d.consDec)+"</td><td style='border:1px solid #e2e2e2'></td></tr>";
+       "<th style='background:"+NAVY+";color:#fff;font-size:9.5px;letter-spacing:.5px;padding:7px 9px;text-align:left'>TAREFA</th>"+
+       "<th style='background:"+NAVY+";color:#fff;font-size:9.5px;letter-spacing:.5px;padding:7px 6px;width:74px'>DATA</th>"+
+       "<th style='background:"+NAVY+";color:#fff;font-size:9.5px;letter-spacing:.5px;padding:7px 6px;width:60px'>TEMPO</th>"+
+       "<th style='background:"+NAVY+";color:#fff;font-size:9.5px;letter-spacing:.5px;padding:7px 9px;width:140px;text-align:left'>RESPONSÁVEL</th></tr></thead><tbody>";
+    d.tarefas.forEach(function(t,ix){ var bg=(ix%2)?"#F6F8FC":"#fff";
+      h+="<tr style='background:"+bg+"'><td style='font-size:10.5px;padding:6px 9px;border-bottom:1px solid "+LINHA+";word-wrap:break-word'>"+esc(t.tarefa)+"</td>"+
+         "<td style='font-size:10.5px;padding:6px;border-bottom:1px solid "+LINHA+";text-align:center'>"+fmtDataBr_(t.data)+"</td>"+
+         "<td style='font-size:10.5px;padding:6px;border-bottom:1px solid "+LINHA+";text-align:center'>"+hm(hoursToDec_(t.dur))+"</td>"+
+         "<td style='font-size:10.5px;padding:6px 9px;border-bottom:1px solid "+LINHA+"'>"+nomeResp(t.resp)+"</td></tr>"; });
+    h+="<tr data-nobreak='1'><td colspan='2' style='font-size:11px;font-weight:bold;padding:8px 9px;text-align:right;color:"+NAVY+"'>TOTAL DE CONSULTIVO</td><td style='font-size:11px;font-weight:bold;padding:8px 6px;text-align:center;color:"+NAVY+"'>"+hm(d.consDec)+"</td><td></td></tr>";
     h+="</tbody></table>";
   }
-  // custas
-  h+="<div style='font-size:15px;font-weight:bold;text-decoration:underline;margin:24px 0 8px'>CUSTAS</div>";
-  h+="<ul style='font-size:13px;margin-top:0'>"+(d.custas>0?("<li>"+(d.descCustas||("Custas do mês: R$ "+brl2_(d.custas)))+"</li>"):"<li>Sem custas a serem cobradas no mês de referência</li>")+"</ul>";
-  // audiencias / processos
-  if(d.audiencias>0||d.cobrAud>0||d.excProc>0||d.cobrProc>0){
-    h+="<div style='font-size:15px;font-weight:bold;text-decoration:underline;margin:20px 0 8px'>AUDIÊNCIAS E PROCESSOS</div><ul style='font-size:13px;margin-top:0'>";
-    if(d.audiencias>0||d.cobrAud>0){
-      h+="<li><b>Audiências realizadas</b>: "+(d.audiencias>0?d.audiencias+" audiência(s)":"")+" &ndash; <b>R$ "+brl2_(d.cobrAud)+"</b>";
-      var la=splitAud_(d.descAudiencias);
-      if(la.length){ h+="<ul style='margin:4px 0 0'>"; la.forEach(function(a){ h+="<li>"+a+"</li>"; }); h+="</ul>"; }
-      h+="</li>";
-    }
-    if(d.excProc>0||d.cobrProc>0){
-      h+="<li><b>Excesso de processos</b>: "+(d.excProc>0?d.excProc+" processo(s) acima do contratado":"")+" &ndash; <b>R$ "+brl2_(d.cobrProc)+"</b>";
-      var lp=String(d.descProcessos||"").split(/[;\n]+/).map(function(s){return s.trim();}).filter(Boolean);
-      if(lp.length){ h+="<ul style='margin:4px 0 0'>"; lp.forEach(function(p){ h+="<li>"+p+"</li>"; }); h+="</ul>"; }
-      h+="</li>";
-    }
-    h+="</ul>";
-  }
+  // audiências, processos e custas
+  var temExtras = d.audiencias>0||d.cobrAud>0||d.excProc>0||d.cobrProc>0||d.custas>0;
+  h+=titulo("Audiências, processos e custas","Processual");
+  if(!temExtras) h+="<div style='font-size:11.5px;color:"+MUT+";padding:10px 12px;background:#F6F8FC;border-radius:8px'>Sem audiências, processos excedentes ou custas a cobrar neste mês.</div>";
+  function bloco(t, val, itens){ var s="<div data-nobreak='1' style='border:1px solid "+LINHA+";border-radius:8px;padding:10px 14px;margin-bottom:8px'><table style='width:100%;border-collapse:collapse'><tr><td style='font-size:12px;font-weight:bold;color:"+NAVY+"'>"+t+"</td><td style='text-align:right;font-size:12px;font-weight:bold;color:"+NAVY+"'>"+val+"</td></tr></table>";
+    if(itens&&itens.length){ s+="<ul style='margin:6px 0 0;padding-left:18px;font-size:10.5px;color:"+TX+"'>"; itens.forEach(function(x){ s+="<li style='margin:2px 0'>"+esc(x)+"</li>"; }); s+="</ul>"; }
+    return s+"</div>"; }
+  if(d.audiencias>0||d.cobrAud>0) h+=bloco("Audiências realizadas"+(d.audiencias>0?" ("+d.audiencias+")":""), d.cobrAud>0?"R$ "+brl2_(d.cobrAud):"—", splitAud_(d.descAudiencias));
+  if(d.excProc>0||d.cobrProc>0) h+=bloco("Processos acima do contratado"+(d.excProc>0?" ("+d.excProc+")":""), d.cobrProc>0?"R$ "+brl2_(d.cobrProc):"—", String(d.descProcessos||"").split(/[;\n]+/).map(function(s){return s.trim();}).filter(Boolean));
+  if(d.custas>0) h+=bloco("Reembolso de custas", "R$ "+brl2_(d.custas), String(d.descCustas||"").split(/[;\n]+/).map(function(s){return s.trim();}).filter(Boolean));
   // valores a cobrar
-  h+="<div style='margin-top:22px;border:2px solid #F86C2E;border-radius:8px;padding:14px 18px;background:#FFF4EE'>";
-  h+="<div style='font-size:13px;font-weight:bold;color:#D4561C;margin-bottom:8px'>VALORES A COBRAR NO MÊS</div><table style='width:100%;border-collapse:collapse;font-size:13px'>";
   var linhasCob=(d.cobrancas&&d.cobrancas.length)?d.cobrancas:[];
-  if(!linhasCob.length){ // fallback quando ainda não foi importado/lançado no Receber
+  if(!linhasCob.length){ // fallback quando ainda não foi lançado no Receber
     linhasCob=[{label:"Mensalidade de assessoria",valor:d.mensalidade}];
     if(d.cobrExtras>0)linhasCob.push({label:"Horas extras de consultivo",valor:d.cobrExtras});
     if(d.cobrAud>0)linhasCob.push({label:"Audiências",valor:d.cobrAud});
     if(d.cobrProc>0)linhasCob.push({label:"Excesso de processos",valor:d.cobrProc});
     if(d.custas>0)linhasCob.push({label:"Reembolso de custas",valor:d.custas});
   }
-  linhasCob.forEach(function(it){ h+="<tr><td style='padding:3px 0'>"+it.label+"</td><td style='text-align:right'>R$ "+brl2_(it.valor)+"</td></tr>"; });
-  h+="<tr><td style='padding:8px 0 0;font-weight:bold;border-top:1px solid #F5D5C4'>TOTAL DO MÊS</td><td style='text-align:right;font-weight:bold;border-top:1px solid #F5D5C4;padding-top:8px'>R$ "+brl2_(d.totalMes)+"</td></tr>";
-  h+="</table></div>";
-  h+="</div>";
-  h+="<div style='text-align:center;font-size:10px;color:#888;padding:14px 40px 24px'>Av. Anita Garibaldi, 850, Sala 104, Success, Ed. Infinity Prime Offices. Curitiba/PR - CEP: 80540-180<br>(41) 3077-4292 / 3019-4292 | contato@advogadosdh.com.br | www.advogadosdh.com.br</div>";
+  h+="<div data-nobreak='1'>"+titulo("Valores a cobrar em "+periodo.toLowerCase(),"Fechamento");
+  h+="<table style='width:100%;border-collapse:collapse;font-size:12px'>";
+  linhasCob.forEach(function(it){ h+="<tr><td style='padding:8px 12px;border-bottom:1px solid "+LINHA+"'>"+esc(it.label)+"</td><td style='padding:8px 12px;border-bottom:1px solid "+LINHA+";text-align:right'>R$ "+brl2_(it.valor)+"</td></tr>"; });
+  h+="<tr data-nobreak='1'><td style='padding:12px;background:"+NAVY+";color:#fff;font-weight:bold;font-size:13px;letter-spacing:.5px'>TOTAL DO MÊS</td><td style='padding:12px;background:"+NAVY+";color:"+CIANO+";font-weight:bold;font-size:16px;text-align:right'>R$ "+brl2_(d.totalMes)+"</td></tr>";
+  h+="</table>";
+  // o rodapé fica junto do fechamento (nunca sozinho numa página)
+  h+="<div style='margin-top:26px;border-top:1px solid "+LINHA+";text-align:center;font-size:9.5px;color:#8A90A6;padding:12px 0 22px;line-height:1.6'><b style='color:"+NAVY+"'>Domingues &amp; Herold Advogados</b><br>Av. Anita Garibaldi, 850, Sala 104, Success, Ed. Infinity Prime Offices · Curitiba/PR · CEP 80540-180<br>(41) 3077-4292 / 3019-4292 · contato@advogadosdh.com.br · www.advogadosdh.com.br</div>";
+  h+="</div></div>";
   h+="</body></html>";
   return h;
 }
