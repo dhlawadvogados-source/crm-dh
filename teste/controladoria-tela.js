@@ -107,7 +107,8 @@ window.goTab = goTab;
 function nomesClientes() {
   return (D ? D.clientes : []).slice().sort(function (a, b) { var aa = isAtivo(a) ? 0 : 1, bb = isAtivo(b) ? 0 : 1; return aa - bb || String(a.Nome).localeCompare(String(b.Nome)); });
 }
-function isAtivo(c) { var s = norm(c.Status); return s.indexOf('ativo') >= 0 && s.indexOf('inativo') < 0; }
+function decToHMSjs(d) { var t = Math.round(d * 3600); return Math.floor(t / 3600) + ':' + ('0' + Math.floor(t % 3600 / 60)).slice(-2) + ':00'; }
+function isAtivo(c) { var s = norm(c.Status); return s.indexOf('ativ') >= 0 && s.indexOf('inativ') < 0; }
 function rotuloContrato(c) { return tipoContrato(c) + (c.ObjetoContrato ? ' · ' + c.ObjetoContrato : ''); }
 function contratoTag(c) { return '<span class="cp-tag" title="' + esc(rotuloContrato(c)) + '">' + esc(rotuloContrato(c).length > 34 ? rotuloContrato(c).slice(0, 33) + '…' : rotuloContrato(c)) + '</span>'; }
 function nomeRepetido(nome) { return (D ? D.clientes : []).filter(function (c) { return norm(c.Nome) === norm(nome); }).length > 1; }
@@ -242,14 +243,15 @@ window.verCliente = function (id) {
   var c = D.clientes.filter(function (x) { return String(x.ID) === String(id); })[0]; if (!c) return;
   var procs = D.processos.filter(function (p) { return norm(p.Cliente) === norm(c.Nome); });
   var ativos = procs.filter(function (p) { return p.Situacao !== 'Arquivado'; });
-  var r = RESUMO && RESUMO.clientes.filter(function (x) { return norm(x.cliente) === norm(c.Nome); })[0];
-  var aguard = D.custas.filter(function (x) { return norm(x.Cliente) === norm(c.Nome) && x.Status === 'Lançado'; }).length;
   var h = '<div class="ficha">' + campoFicha('Modalidade', esc(c.Tipo)) + campoFicha('Situação', badgeStatus(isAtivo(c) ? 'Ativo' : (c.Status || '—'))) + campoFicha('Responsável', esc(c.Responsavel)) +
     campoFicha('Horas contratadas/mês', hDec(c.HorasContratadas) ? decHm(hDec(c.HorasContratadas)) : '') + campoFicha('Processos contratados', esc(c.ProcessosContratados)) + campoFicha('O que é este contrato', esc(c.ObjetoContrato)) + campoFicha('Subtipo', esc(c.Subtipo)) +
     campoFicha('Início do contrato', c.DataInicio ? fmtD(c.DataInicio) : '') + campoFicha('Fim do contrato', c.DataFim ? fmtD(c.DataFim) : '') + '</div>';
-  if (r) h += '<div class="ficha-sec">Fechamento de ' + mesNome(RESUMO.competencia) + '</div><div class="ficha">' + campoFicha('Consultivo', hm(r.consultivo) + ' (' + r.tarefas + ' tarefas)') + campoFicha('Uso do pacote', r.percentual != null ? r.percentual + '%' : '') +
-    campoFicha('Excedente', r.excedenteDec > 0 ? '<b style="color:var(--dh-laranja)">' + hm(r.excedente) + '</b>' : '') + campoFicha('Processual', r.horasProcessual ? hm(r.horasProcessual) : '') + '</div>';
-  h += '<div class="ficha-sec">Processos (' + ativos.length + ' ativo(s) de ' + procs.length + ')</div>' + (procs.length ? '<table><tbody>' + procs.slice(0, 8).map(function (p) { return '<tr><td>' + esc(p.NumeroCNJ || '(sem número)') + (p.Partes ? '<br><span class="muted">' + esc(p.Partes) + '</span>' : '') + '</td><td>' + esc(p.AreaJuridica || '') + '</td><td>' + badgeStatus(p.Situacao) + '</td></tr>'; }).join('') + '</tbody></table>' + (procs.length > 8 ? '<p class="example-note">… e mais ' + (procs.length - 8) + ' na tela Processos.</p>' : '') : '<p class="muted" style="font-size:13px">Nenhum processo cadastrado.</p>');
+  // a ficha fica curta: o mês a mês fica dentro das pastas (com seletor de mês), nunca empilhado aqui
+  var nq = jsq(c.Nome);
+  h += '<div class="ficha-sec">Pastas do cliente</div><div class="btn-row">' +
+    '<button class="btn ghost sm" onclick="abrirPastaCo(\'' + nq + '\')">' + IC_PASTA + ' Consultivo</button>' +
+    '<button class="btn ghost sm" onclick="abrirPasta(\'' + nq + '\')">' + IC_PASTA + ' Processual · ' + ativos.length + ' processo(s) ativo(s)</button></div>' +
+    '<p class="pasta-nota" style="margin-top:8px">Horas, processos, custas e audiências de cada mês ficam dentro das pastas, com o seletor de mês.</p>';
   h += '<div class="btn-row" style="margin-top:16px"><button class="btn" onclick="editarCliente(\'' + esc(c.ID) + '\')">' + ic('editar') + ' Editar cliente</button><button class="btn ghost" onclick="fecharModal(\'md_ver\')">Fechar</button></div>';
   $('verTitulo').textContent = c.Nome; $('verCorpo').innerHTML = h; abrirModal('md_ver');
 };
@@ -269,8 +271,9 @@ function pastaMesCalc(f, comp) {
 }
 function pastas() {
   var por = {}, comp = compSel();
-  D.clientes.forEach(function (c) { if (!isAtivo(c) || !(Number(c.ProcessosContratados) > 0)) return; var k = norm(c.Nome);
-    if (!por[k] || Number(c.ProcessosContratados) > Number(por[k].cli.ProcessosContratados)) por[k] = { nome: c.Nome, cli: c, procs: [] }; });
+  // todo cliente ativo tem pasta (mesmo nome com vários contratos = uma pasta só; vale o contrato com processos contratados)
+  D.clientes.forEach(function (c) { if (!isAtivo(c)) return; var k = norm(c.Nome);
+    if (!por[k] || Number(c.ProcessosContratados || 0) > Number(por[k].cli.ProcessosContratados || 0)) por[k] = { nome: c.Nome, cli: c, procs: [] }; });
   D.processos.forEach(function (p) { var k = norm(p.Cliente); if (!k) return; if (!por[k]) { var c = D.clientes.filter(function (x) { return norm(x.Nome) === k; }).sort(function (a, b) { return (isAtivo(b) ? 1 : 0) - (isAtivo(a) ? 1 : 0); })[0]; por[k] = { nome: c ? c.Nome : p.Cliente, cli: c, procs: [] }; } por[k].procs.push(p); });
   return Object.keys(por).map(function (k) {
     var f = por[k]; f.contratados = f.cli ? (Number(f.cli.ProcessosContratados) || 0) : 0;
@@ -378,7 +381,12 @@ REND.co = function () { renderConsultivo(); };
 window.renderConsultivo = function () {
   if (!RESUMO || !$('coTabela')) return;
   var comp = RESUMO.competencia, f = norm($('coBusca').value), fil = $('coFiltro').value;
-  var l = RESUMO.clientes.filter(function (c) { return c.cadastrado !== false && (hDec(c.contratadas) > 0 || c.tarefas > 0); })
+  var vistos = {}, base = RESUMO.clientes.filter(function (c) { return c.cadastrado !== false; });
+  base.forEach(function (c) { vistos[norm(c.cliente)] = 1; });
+  D.clientes.forEach(function (c) { var k = norm(c.Nome); if (!isAtivo(c) || vistos[k]) return; vistos[k] = 1;
+    var hs = D.clientes.filter(function (x) { return norm(x.Nome) === k; }).reduce(function (a, x) { return Math.max(a, hDec(x.HorasContratadas)); }, 0);
+    base.push({ cliente: c.Nome, cadastrado: true, travado: false, contratadas: hs ? decToHMSjs(hs) : '', consultivo: '0:00', tarefas: 0, excedente: '0:00', excedenteDec: 0 }); });
+  var l = base
     .filter(function (c) { return !f || norm(c.cliente).indexOf(f) > -1; })
     .filter(function (c) { return fil === 'exc' ? c.excedenteDec > 0 : fil === 'sem' ? !c.tarefas : true; })
     .sort(function (a, b) { return (b.excedenteDec - a.excedenteDec) || String(a.cliente).localeCompare(b.cliente); });
@@ -819,41 +827,96 @@ window.gerarRelatorio = function () {
   $('raPrev').innerHTML = '<div class="card">Gerando…</div>';
   call('ctrlRelatorioAnualDados', [cli, $('ra_De').value, $('ra_Ate').value, $('ra_Contrato').value]).then(function (d) { RA = d; renderRelatorio(d); }, function (e) { $('raPrev').innerHTML = ''; toast(e.message, true); });
 };
+// Relatório de Gestão Jurídica: 8 partes, tudo editável na pré-visualização; o PowerPoint sai com o que estiver na tela.
+function ph(k, v, txtPh, tag, attrs) { tag = tag || 'span'; return '<' + tag + ' contenteditable="true" data-k="' + k + '" data-ph="' + esc(txtPh || 'Clique para escrever…') + '"' + (attrs || '') + '>' + esc(v || '') + '</' + tag + '>'; }
+var RA_CONS = 6, RA_PRI = 4;
+// [sobrelinha, manchete, parte em destaque] de cada parte (mesmo texto na tela e no PowerPoint)
+function raTitulos(ano) { return {
+  2: ['O ano em números', 'O ano jurídico', 'em números.'],
+  3: ['Proteção patrimonial', 'Exposição jurídica e', 'economia obtida.'],
+  4: ['Perfil dos riscos', 'Onde estão os', 'riscos jurídicos.'],
+  5: ['Atuação consultiva', 'Prevenção que apoia', 'decisões concretas.'],
+  6: ['Dedicação', 'Acompanhamento jurídico', 'mês a mês.'],
+  7: ['Prioridades ' + (+ano + 1), 'Do histórico ao', 'plano de ação.'],
+  8: ['Próximo ciclo', 'Parceria e visão de', 'longo prazo.'] }; }
+function raSec(n, T) { var t = T[n]; return '<div class="ra-sec"><div class="ra-eyebrow"><span>' + ('0' + n).slice(-2) + '</span>' + esc(t[0]) + '</div><h3 class="ra-h">' + esc(t[1]) + ' <em>' + esc(t[2]) + '</em></h3>'; }
+function sugestoesPrioridades(d, areaTop, pctTop) {
+  var l = [];
+  if (/trabalh/i.test(areaTop) && pctTop >= 40) l.push(['Reduzir o passivo trabalhista', 'Revisar rotinas de RH: contratos, controle de jornada, pagamentos e desligamentos', 'RH do cliente com a DH LAW', 'Novas reclamatórias por trimestre']);
+  else if (areaTop) l.push(['Reduzir as demandas da área ' + areaTop.toLowerCase(), 'Mapear a origem das ações e corrigir os procedimentos internos', 'Gestão do cliente com a DH LAW', 'Novas ações por trimestre']);
+  l.push(['Acompanhar de perto os processos ativos', 'Reunião trimestral de andamento, riscos e provisões', 'DH LAW', 'Processos com decisão favorável (%)']);
+  l.push(['Fortalecer a prevenção consultiva', 'Validar com o jurídico contratos e decisões relevantes antes de assinar', 'Diretoria com a DH LAW', 'Consultas preventivas por mês']);
+  while (l.length < RA_PRI) l.push(['', '', '', '']);
+  return l.slice(0, RA_PRI);
+}
 function renderRelatorio(d) {
-  var areas = Object.keys(d.processos.porArea), vals = areas.map(function (a) { return d.processos.porArea[a]; });
-  var e = d.economia, gasto = e.pago;
-  var h = '<div class="card"><div class="ra-head"><h2 style="margin:0"><span class="t">Pré-visualização: ' + ed('titulo', d.cliente + (d.contrato ? ' · ' + d.contrato : '') + ' · ' + mesNome(d.de) + ' a ' + mesNome(d.ate)) + '</span></h2><span class="edit-badge">' + ic('editar', 13) + ' Editável</span></div>' +
-    '<p class="example-note" style="margin-top:-6px">Clique em qualquer texto ou número para ajustar. O PowerPoint sai exatamente com o que estiver aqui.</p>';
-  h += '<div class="ra-sec"><h3>Quantidade e situação de processos</h3><div class="ra-kpis">' +
-    '<div class="stat"><div class="lb">Processos ativos</div>' + ed('pAtivos', d.processos.ativos, 'div', ' class="val"') + '</div>' +
-    '<div class="stat"><div class="lb">Arquivados no período</div>' + ed('pArq', d.processos.arquivadosNoPeriodo, 'div', ' class="val"') + '</div>' +
-    '<div class="stat"><div class="lb">Novos no período</div>' + ed('pNovos', d.processos.novosNoPeriodo, 'div', ' class="val"') + '</div>' +
-    '<div class="stat"><div class="lb">Audiências realizadas</div>' + ed('pAud', d.audiencias, 'div', ' class="val"') + '</div></div>';
-  if (areas.length) h += '<div class="donut-wrap"><div class="donut" style="background:' + conic(vals) + '"><b>' + d.processos.total + '<small>processos</small></b></div><div class="leg">' +
-    areas.map(function (a, i) { return '<div data-area="' + i + '"><i style="background:' + CORES[i % CORES.length] + '"></i>' + ed('area' + i, a) + ': <b contenteditable="true" data-k="areaN' + i + '">' + vals[i] + '</b> (' + pct(vals[i], d.processos.total) + '%)</div>'; }).join('') + '</div></div>';
-  h += '</div>';
-  h += '<div class="ra-sec"><h3>Economia obtida (saving)</h3><div class="ra-kpis">' +
-    '<div class="stat"><div class="lb">Valor das causas</div>' + ed('eCausa', brl(e.valorCausa), 'div', ' class="val" style="font-size:19px"') + '</div>' +
-    '<div class="stat"><div class="lb">Valores pagos (condenações e acordos)</div>' + ed('eGasto', brl(gasto), 'div', ' class="val" style="font-size:19px"') + '</div>' +
-    '<div class="stat"><div class="lb">Saving</div>' + ed('eSaving', brl(e.saving), 'div', ' class="val" style="font-size:19px;color:var(--ok)"') + '</div></div>' +
-    '<div class="donut-wrap"><div class="donut" style="background:conic-gradient(var(--warn) 0 ' + (100 - e.percentual) + '%, var(--ok) ' + (100 - e.percentual) + '% 100%)"><b>' + ed('ePct', String(e.percentual).replace('.', ',') + '%') + '<small>saving</small></b></div>' +
-    '<div class="leg"><div><i style="background:var(--ok)"></i>Economia (saving)</div><div><i style="background:var(--warn)"></i>Pago em condenações e acordos</div>' +
-    '<div class="muted" style="font-size:12px;margin-top:6px">Calculado sobre os ' + e.comResultado + ' processo(s) com resultado (causas de ' + brl(e.causaComResultado) + ').</div></div></div>' +
-    (e.semResultado ? '<p class="example-note" style="margin-top:10px">' + ed('eDisc', e.semResultado + ' processo(s) ainda em discussão, com ' + brl(e.emDiscussao) + ' em causas: sem condenação ou acordo informado, não entram como pago nem como saving.') + '</p>' : '') + '</div>';
-  h += '<div class="ra-sec"><h3>Horas trabalhadas</h3><div class="tbl-wrap"><table id="raHoras"><thead><tr><th>Mês</th><th>Consultivo</th><th>Processual</th><th>Total</th></tr></thead><tbody>' +
-    d.horas.meses.map(function (m, i) { return '<tr><td>' + mesNome(m.mes) + '</td><td>' + ed('hc' + i, decHm(m.consultivo)) + '</td><td>' + ed('hp' + i, decHm(m.processual)) + '</td><td>' + decHm(m.consultivo + m.processual) + '</td></tr>'; }).join('') +
-    '</tbody><tfoot><tr><td>Total no período</td><td>' + ed('hcT', decHm(d.horas.totalConsultivo)) + '</td><td>' + ed('hpT', decHm(d.horas.totalProcessual)) + '</td><td>' + decHm(d.horas.totalConsultivo + d.horas.totalProcessual) + '</td></tr>' +
-    '<tr><td class="muted">Média mensal</td><td>' + ed('hcM', decHm(d.horas.mediaConsultivo)) + '</td><td>' + ed('hpM', decHm(d.horas.mediaProcessual)) + '</td><td>' + decHm(d.horas.mediaConsultivo + d.horas.mediaProcessual) + '</td></tr></tfoot></table></div>' +
-    '<p class="example-note" style="margin-top:8px">Horas contratadas por mês: ' + hm(d.contratadasMes) + '</p></div>';
-  var sug = d.consultoriasSugestao.length ? 'Ao longo do período, prestamos consultoria em: ' + d.consultoriasSugestao.slice(0, 8).join('; ') + '.' : 'Descreva aqui as consultorias realizadas no período.';
-  h += '<div class="ra-sec"><h3>Consultorias realizadas no período</h3>' + ed('consult', sug, 'div', ' class="ra-narr"') + '<p class="ra-src">Sugestão montada a partir das tarefas lançadas. Ajuste à vontade.</p></div>';
-  h += '<div class="ra-sec"><h3>Conclusão</h3>' + ed('conclusao', 'O período foi marcado por ' + d.processos.ativos + ' processo(s) ativo(s) e economia de ' + brl(e.saving) + ' frente ao valor das causas em discussão, reforçando a estratégia de atuação preventiva adotada junto ao cliente.', 'div', ' class="ra-narr"') + '</div>';
-  h += '<div class="btn-row"><button class="btn" onclick="exportarPptx()">' + ic('grafico') + ' Exportar PowerPoint</button><button class="btn ghost" onclick="gerarRelatorio()">Recarregar dados (desfaz edições)</button></div></div>';
+  var areas = Object.keys(d.processos.porArea).sort(function (a, b) { return d.processos.porArea[b] - d.processos.porArea[a]; }), vals = areas.map(function (a) { return d.processos.porArea[a]; });
+  var tot = d.processos.total || 0, e = d.economia, ano = String(d.ate).slice(0, 4);
+  var horasTot = (d.horas.totalConsultivo || 0) + (d.horas.totalProcessual || 0);
+  var areaTop = areas[0] || '', pctTop = pct(vals[0] || 0, tot), T = raTitulos(ano);
+  var h = '<div class="card ra"><div class="ra-head"><h2 style="margin:0"><span class="t">Pré-visualização do relatório</span></h2><span class="edit-badge">' + ic('editar', 13) + ' Editável</span></div>' +
+    '<p class="example-note" style="margin-top:-6px">Clique em qualquer texto ou número para ajustar. Os campos em cinza são para você completar. O PowerPoint sai exatamente com o que estiver aqui.</p>';
+  // 1. capa
+  h += '<div class="ra-capa"><img src="dh-logo.svg" alt="DH LAW"><div><div class="ra-kicker">Relatório de Gestão Jurídica</div>' +
+    ed('titulo', 'Relatório de Gestão Jurídica ' + ano + ' — ' + d.cliente + (d.contrato && d.contrato !== 'Todos os contratos' ? ' (' + d.contrato + ')' : ''), 'div', ' class="ra-cap-t"') +
+    ed('periodo', 'Período: ' + mesNome(d.de) + ' a ' + mesNome(d.ate), 'div', ' class="ra-cap-p"') + '<div class="ra-cap-f">Domingues &amp; Herold Advogados</div></div></div>';
+  // 2. ano em números
+  h += raSec(2, T) + '<div class="ra-kpis">' +
+    '<div class="stat"><div class="lb">Processos ativos</div>' + ed('nAtivos', d.processos.ativos, 'div', ' class="val"') + '</div>' +
+    '<div class="stat"><div class="lb">Novos no período</div>' + ed('nNovos', d.processos.novosNoPeriodo, 'div', ' class="val"') + '</div>' +
+    '<div class="stat"><div class="lb">Arquivados no período</div>' + ed('nArq', d.processos.arquivadosNoPeriodo, 'div', ' class="val"') + '</div>' +
+    '<div class="stat"><div class="lb">Audiências realizadas</div>' + ed('nAud', d.audiencias, 'div', ' class="val"') + '</div>' +
+    '<div class="stat"><div class="lb">Trabalho jurídico registrado</div>' + ed('nHoras', decHm(horasTot), 'div', ' class="val"') + '</div></div></div>';
+  // 3. proteção patrimonial
+  h += raSec(3, T) + '<div class="ra-kpis">' +
+    '<div class="stat"><div class="lb">Valor das causas</div>' + ed('eCausa', brl(e.valorCausa), 'div', ' class="val ra-money" style="font-size:17px"') + '</div>' +
+    '<div class="stat"><div class="lb">Valores pagos (condenações e acordos)</div>' + ed('ePago', brl(e.pago), 'div', ' class="val ra-money" style="font-size:17px;color:var(--warn)"') + '</div>' +
+    '<div class="stat"><div class="lb">Valores recebidos</div>' + ed('eRec', brl(e.recebido || 0), 'div', ' class="val ra-money" style="font-size:17px;color:var(--ok)"') + '</div>' +
+    '<div class="stat"><div class="lb">Saving</div>' + ed('eSaving', brl(e.saving), 'div', ' class="val ra-money" style="font-size:17px;color:var(--ok)"') + '</div></div>' +
+    '<p class="ra-narr" style="margin:-6px 0 0">Economia de ' + ed('ePct', String(e.percentual).replace('.', ',') + '%') + ' sobre o valor das causas dos processos com resultado.</p>' +
+    '<div class="ra-lbl">O que isso significa</div>' + ed('eTexto', 'Os processos somam ' + brl(e.valorCausa) + ' em valor de causa, que é a exposição informada nas ações. Nos processos já resolvidos, o cliente pagou ' + brl(e.pago) + ' e recebeu ' + brl(e.recebido || 0) + ', o que representa uma economia de ' + brl(e.saving) + '.', 'div', ' class="ra-narr"') +
+    '</div>';
+  // 4. perfil dos riscos
+  h += raSec(4, T) + '';
+  if (areas.length) h += '<div class="donut-wrap"><div class="donut" style="background:' + conic(vals) + '"><b>' + tot + '<small>processos</small></b></div><div class="leg">' +
+    areas.map(function (a, i) { return '<div><i style="background:' + CORES[i % CORES.length] + '"></i>' + ed('area' + i, a) + ': <b contenteditable="true" data-k="areaN' + i + '">' + vals[i] + '</b> (' + pct(vals[i], tot) + '%)</div>'; }).join('') + '</div></div>';
+  h += ed('riscoTxt', areaTop ? 'A área ' + areaTop.toLowerCase() + ' concentra ' + pctTop + '% dos processos (' + (vals[0] || 0) + ' de ' + tot + '), sendo hoje a principal fonte de risco jurídico da empresa.' : 'Nenhum processo no período.', 'div', ' class="ra-narr"') +
+    '<div class="ra-lbl">Fatores que originam as demandas</div>' + ph('riscoAnalise', '', 'Ex.: desligamentos sem documentação, horas extras, terceirizados, contratos com fornecedores…', 'div', ' class="ra-narr ra-edit"') + '</div>';
+  // 5. atuação consultiva
+  var temas = (d.consultoriasSugestao || []).slice(0, RA_CONS);
+  h += raSec(5, T) + '<div class="tbl-wrap"><table class="ra-tab"><thead><tr><th>Tema</th><th>Problema enfrentado</th><th>Orientação prestada</th><th>Próximo cuidado recomendado</th></tr></thead><tbody>';
+  for (var i = 0; i < RA_CONS; i++) h += '<tr><td>' + ph('ct' + i + 'a', temas[i] || '', 'Tema') + '</td><td>' + ph('ct' + i + 'b', '', 'Problema') + '</td><td>' + ph('ct' + i + 'c', '', 'Orientação') + '</td><td>' + ph('ct' + i + 'd', '', 'Próximo cuidado') + '</td></tr>';
+  h += '</tbody></table></div><p class="ra-src">Os temas vieram das tarefas de consultivo lançadas no período. Linhas vazias não vão para o PowerPoint.</p></div>';
+  // 6. dedicação
+  var pico = d.horas.meses.slice().sort(function (a, b) { return (b.consultivo + b.processual) - (a.consultivo + a.processual); })[0];
+  h += raSec(6, T) + '<div class="ra-kpis">' +
+    '<div class="stat"><div class="lb">Consultivo</div>' + ed('hcT', decHm(d.horas.totalConsultivo), 'div', ' class="val"') + '</div>' +
+    '<div class="stat"><div class="lb">Processual</div>' + ed('hpT', decHm(d.horas.totalProcessual), 'div', ' class="val"') + '</div>' +
+    '<div class="stat"><div class="lb">Média mensal</div>' + ed('hMed', decHm((d.horas.mediaConsultivo || 0) + (d.horas.mediaProcessual || 0)), 'div', ' class="val"') + '</div></div>' +
+    '<div class="tbl-wrap"><table id="raHoras"><thead><tr><th>Mês</th><th>Consultivo</th><th>Processual</th><th>Total</th></tr></thead><tbody>' +
+    d.horas.meses.map(function (m, j) { return '<tr><td>' + mesNome(m.mes) + '</td><td>' + ed('hc' + j, decHm(m.consultivo)) + '</td><td>' + ed('hp' + j, decHm(m.processual)) + '</td><td>' + decHm(m.consultivo + m.processual) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
+    '<div class="ra-lbl">Picos de atividade</div>' + ed('picoTxt', pico && (pico.consultivo + pico.processual) > 0 ? 'O maior volume de trabalho foi em ' + mesNome(pico.mes) + ', com ' + decHm(pico.consultivo + pico.processual) + ' registradas. ' : '', 'div', ' class="ra-narr"') +
+    ph('picoMotivo', '', 'Explique o que motivou o pico (ex.: auditoria, reestruturação, audiências concentradas…)', 'div', ' class="ra-narr ra-edit"') +
+    '<div class="ra-lbl">Principais entregas do período</div>' + ed('entregas', [].concat(d.consultoriasSugestao || []).slice(0, 5).concat((d.processualSugestao || []).slice(0, 3)).map(function (x) { return '• ' + x; }).join('\n') || '', 'div', ' class="ra-narr" style="white-space:pre-line"') + '</div>';
+  // 7. prioridades
+  var pr = sugestoesPrioridades(d, areaTop, pctTop);
+  h += raSec(7, T) + '<div class="tbl-wrap"><table class="ra-tab"><thead><tr><th>Prioridade</th><th>Medida recomendada</th><th>Responsável</th><th>Indicador</th></tr></thead><tbody>' +
+    pr.map(function (r, j) { return '<tr><td>' + ph('pr' + j + 'a', r[0], 'Prioridade') + '</td><td>' + ph('pr' + j + 'b', r[1], 'Medida') + '</td><td>' + ph('pr' + j + 'c', r[2], 'Responsável') + '</td><td>' + ph('pr' + j + 'd', r[3], 'Indicador') + '</td></tr>'; }).join('') +
+    '</tbody></table></div><p class="ra-src">Sugestões a partir dos dados do período. Ajuste ou apague o que não fizer sentido.</p></div>';
+  // 8. encerramento
+  h += raSec(8, T) + '' + ed('encerra', 'Agradecemos a confiança da ' + d.cliente + ' ao longo de ' + ano + '. Seguimos comprometidos em proteger o patrimônio da empresa, antecipar riscos e apoiar cada decisão com segurança jurídica. No próximo ciclo, manteremos o acompanhamento próximo dos processos, a atuação preventiva no consultivo e a apresentação periódica dos resultados.', 'div', ' class="ra-narr"') +
+    '<div class="ra-lbl">Próximo ciclo de acompanhamento</div>' + ph('proxCiclo', 'Reunião de alinhamento das prioridades de ' + (+ano + 1) + ' e relatórios trimestrais de acompanhamento.', 'Ex.: reunião em fevereiro e relatórios trimestrais', 'div', ' class="ra-narr ra-edit"') + '</div>';
+  h += '<div class="btn-row"><button class="btn" onclick="exportarPptx()">' + ic('grafico') + ' Exportar PowerPoint</button><button class="btn ghost" onclick="gerarRelatorio()">Recarregar dados (desfaz ajustes)</button></div></div>';
   $('raPrev').innerHTML = h;
 }
 function val(k) { var e = document.querySelector('#raPrev [data-k="' + k + '"]'); return e ? e.innerText.trim() : ''; }
 function horasNum(s) { var m = String(s).match(/(\d+)\s*h\s*(\d+)?/); if (m) return (+m[1]) + (+(m[2] || 0)) / 60; return hDec(s) || parseFloat(String(s).replace(',', '.')) || 0; }
 var PPTX_LIB = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+function logoPng(cb) {
+  // a logo em PNG de alta resolução, a partir do SVG oficial (o PowerPoint não lê SVG em todas as versões)
+  var img = new Image(); img.onload = function () { try { var c = document.createElement('canvas'); c.width = 1018; c.height = 541; c.getContext('2d').drawImage(img, 0, 0, 1018, 541); cb(c.toDataURL("image/png").replace(/^data:/, "")); } catch (e) { cb(null); } };
+  img.onerror = function () { cb(null); }; img.src = 'dh-logo.svg';
+}
 window.exportarPptx = function () {
   if (!window.PptxGenJS) {
     toast('Preparando o PowerPoint…');
@@ -862,55 +925,119 @@ window.exportarPptx = function () {
     sc.onerror = function () { toast('Não consegui carregar a biblioteca do PowerPoint (sem internet?). Tente de novo.', true); };
     document.head.appendChild(sc); return;
   }
-  var d = RA, AZUL = '364B9B', MAR = '141D3F', CIANO = '23B9D6', CINZA = '7A8297';
+  logoPng(function (LOGO) { montarPptx(LOGO); });
+};
+function fundoPng(claro) {
+  // fundo escuro com brilho ciano, como as seções do site (o PowerPoint não tem gradiente radial)
+  try {
+    var c = document.createElement('canvas'); c.width = 1600; c.height = 900; var g = c.getContext('2d');
+    g.fillStyle = claro ? '#F3F6F7' : '#05080B'; g.fillRect(0, 0, 1600, 900);
+    if (!claro) {
+      var r = g.createRadialGradient(1250, 120, 10, 1250, 120, 760); r.addColorStop(0, 'rgba(35,185,214,0.20)'); r.addColorStop(1, 'rgba(35,185,214,0)');
+      g.fillStyle = r; g.fillRect(0, 0, 1600, 900);
+      var r2 = g.createRadialGradient(200, 820, 10, 200, 820, 600); r2.addColorStop(0, 'rgba(35,185,214,0.08)'); r2.addColorStop(1, 'rgba(35,185,214,0)');
+      g.fillStyle = r2; g.fillRect(0, 0, 1600, 900);
+    }
+    return c.toDataURL('image/png').replace(/^data:/, '');
+  } catch (e) { return null; }
+}
+function montarPptx(LOGO) {
+  var d = RA, ano = String(d.ate).slice(0, 4), T = raTitulos(ano);
+  var NEG = '05080B', CIANO = '23B9D6', BR = 'F5F7F8', TX = 'C7D0D4', MUT = '93A0A6', CARD = '0C1D24', VERDE = '3DCB8B', LAR = 'F59A5B', F = 'Montserrat';
+  var BG = fundoPng(false), BGC = fundoPng(true);
   var p = new PptxGenJS(); p.layout = 'LAYOUT_WIDE'; p.title = val('titulo');
-  function base(t) {
-    var s = p.addSlide(); s.background = { color: 'FFFFFF' };
-    s.addShape(p.ShapeType.rect, { x: 0, y: 0, w: 13.33, h: 0.9, fill: { color: MAR } });
-    s.addText(t, { x: 0.5, y: 0.15, w: 10, h: 0.6, fontFace: 'Montserrat', fontSize: 22, bold: true, color: 'FFFFFF' });
-    s.addImage({ path: 'logo-dh.png', x: 11.6, y: 0.12, w: 1.3, h: 0.66, sizing: { type: 'contain', w: 1.3, h: 0.66 } });
-    s.addShape(p.ShapeType.rect, { x: 0, y: 0.9, w: 13.33, h: 0.06, fill: { color: CIANO } });
+  var nSlide = 1;
+  function logo(s, x, y, w) { if (LOGO) s.addImage({ data: LOGO, x: x, y: y, w: w, h: w * 541 / 1018 }); else s.addImage({ path: 'logo-dh.png', x: x, y: y, w: w, h: w * 0.5, sizing: { type: 'contain', w: w, h: w * 0.5 } }); }
+  function fundo(s, claro) { var b = claro ? BGC : BG; if (b) s.background = { data: b }; else s.background = { color: claro ? 'F3F6F7' : NEG }; }
+  function base(num) {
+    var s = p.addSlide(); fundo(s); nSlide++;
+    var t = T[num];
+    s.addShape(p.ShapeType.line, { x: 0.6, y: 0.62, w: 0.4, h: 0, line: { color: CIANO, width: 2 } });
+    s.addText((('0' + num).slice(-2) + '  ·  ' + t[0]).toUpperCase(), { x: 1.1, y: 0.45, w: 8, h: 0.34, fontFace: F, fontSize: 10, bold: true, color: CIANO, charSpacing: 2 });
+    s.addText([{ text: t[1] + ' ', options: { color: BR } }, { text: t[2], options: { color: CIANO } }], { x: 0.6, y: 0.85, w: 10.6, h: 0.85, fontFace: F, fontSize: 30, bold: true, fit: 'shrink' });
+    logo(s, 11.8, 0.4, 1.1);
+    s.addText(val('titulo'), { x: 0.6, y: 7.05, w: 10, h: 0.3, fontFace: F, fontSize: 8.5, color: '5F6D74' });
+    s.addText(String(nSlide), { x: 12.2, y: 7.05, w: 0.6, h: 0.3, fontFace: F, fontSize: 8.5, color: '5F6D74', align: 'right' });
     return s;
   }
-  function kpi(s, x, y, lb, v, cor) {
-    s.addShape(p.ShapeType.rect, { x: x, y: y, w: 2.9, h: 1.3, fill: { color: 'F3F5F9' }, line: { color: CIANO, width: 0 } });
-    s.addShape(p.ShapeType.rect, { x: x, y: y, w: 2.9, h: 0.06, fill: { color: CIANO } });
-    s.addText(lb.toUpperCase(), { x: x + 0.15, y: y + 0.15, w: 2.6, h: 0.3, fontFace: 'Montserrat', fontSize: 10, bold: true, color: CINZA });
-    s.addText(v, { x: x + 0.15, y: y + 0.5, w: 2.7, h: 0.65, fontFace: 'Montserrat', fontSize: 24, bold: true, color: cor || AZUL });
+  function card(s, x, y, w, h) { s.addShape(p.ShapeType.roundRect, { x: x, y: y, w: w, h: h, rectRadius: 0.18, fill: { color: CARD }, line: { color: '1E5C6B', width: 1 } }); }
+  function kpi(s, x, y, w, lb, v, cor, sz) {
+    card(s, x, y, w, 1.45);
+    s.addText(lb.toUpperCase(), { x: x + 0.2, y: y + 0.18, w: w - 0.4, h: 0.36, fontFace: F, fontSize: 8.5, bold: true, color: MUT, charSpacing: 1, valign: 'top' });
+    s.addText(v, { x: x + 0.2, y: y + 0.6, w: w - 0.4, h: 0.65, fontFace: F, fontSize: sz || (v.length > 12 ? 18 : 26), bold: true, color: cor || BR, fit: 'shrink' });
   }
-  // capa
-  var c = p.addSlide(); c.background = { color: MAR };
-  c.addImage({ path: 'logo-dh.png', x: 0.8, y: 0.8, w: 2.2, h: 1.1, sizing: { type: 'contain', w: 2.2, h: 1.1 } });
-  c.addText('RELATÓRIO ANUAL', { x: 0.8, y: 2.6, w: 11, h: 0.6, fontFace: 'Montserrat', fontSize: 16, bold: true, color: CIANO, charSpacing: 4 });
-  c.addText(val('titulo'), { x: 0.8, y: 3.2, w: 11.5, h: 1.4, fontFace: 'Montserrat', fontSize: 34, bold: true, color: 'FFFFFF' });
-  c.addText('Domingues & Herold Advogados', { x: 0.8, y: 6.4, w: 8, h: 0.4, fontFace: 'Montserrat', fontSize: 12, color: 'A9E3EF' });
-  // processos
-  var s1 = base('Quantidade e situação de processos');
-  kpi(s1, 0.5, 1.3, 'Processos ativos', val('pAtivos')); kpi(s1, 3.6, 1.3, 'Arquivados no período', val('pArq')); kpi(s1, 6.7, 1.3, 'Novos no período', val('pNovos')); kpi(s1, 9.8, 1.3, 'Audiências realizadas', val('pAud'));
+  function texto(s, t, x, y, w, hh, sz, extra) { if (!t) return; s.addText(t, Object.assign({ x: x, y: y, w: w, h: hh, fontFace: F, fontSize: sz || 14, color: TX, valign: 'top', paraSpaceAfter: 6 }, extra || {})); }
+  function rotulo(s, t, x, y, w) { s.addText(t.toUpperCase(), { x: x, y: y, w: w || 6, h: 0.3, fontFace: F, fontSize: 9.5, bold: true, color: CIANO, charSpacing: 1.5 }); }
+  function tabela(s, cab, linhas, y) {
+    var rows = [cab.map(function (c) { return { text: c.toUpperCase(), options: { bold: true, color: CIANO, fill: { color: '0A1820' }, fontSize: 10 } }; })]
+      .concat(linhas.map(function (l, i) { return l.map(function (c, j) { return { text: c || '', options: { color: j === 0 ? BR : TX, bold: j === 0, fill: { color: i % 2 ? '08141A' : '0C1D24' } } }; }); }));
+    s.addTable(rows, { x: 0.6, y: y, w: 12.13, fontFace: F, fontSize: 12.5, rowH: 0.55, border: { type: 'solid', color: '1E3A44', pt: 0.75 }, valign: 'middle', margin: 0.08 });
+  }
+  var eixo = { catAxisLabelColor: MUT, valAxisLabelColor: MUT, valGridLine: { color: '1E3A44', size: 0.5 }, catAxisLineShow: false, valAxisLineShow: false, legendColor: TX, legendFontFace: F, catAxisLabelFontFace: F, valAxisLabelFontFace: F };
+  // 1. capa (como a abertura do site)
+  var c = p.addSlide(); fundo(c);
+  logo(c, 0.7, 0.6, 1.9);
+  c.addShape(p.ShapeType.line, { x: 0.7, y: 2.62, w: 0.45, h: 0, line: { color: CIANO, width: 2 } });
+  c.addText('RELATÓRIO DE GESTÃO JURÍDICA  ·  ' + ano, { x: 1.25, y: 2.45, w: 10, h: 0.36, fontFace: F, fontSize: 11, bold: true, color: CIANO, charSpacing: 3 });
+  c.addText(val('titulo'), { x: 0.7, y: 2.95, w: 11.8, h: 2.1, fontFace: F, fontSize: 40, bold: true, color: BR, valign: 'top', fit: 'shrink' });
+  c.addShape(p.ShapeType.roundRect, { x: 0.7, y: 5.35, w: 4.6, h: 0.5, rectRadius: 0.25, fill: { color: NEG, transparency: 100 }, line: { color: CIANO, width: 1 } });
+  c.addText(val('periodo'), { x: 0.7, y: 5.35, w: 4.6, h: 0.5, fontFace: F, fontSize: 12, color: 'DCE5E8', align: 'center', valign: 'middle' });
+  c.addText('Domingues & Herold Advogados  ·  dhlaw.com.br', { x: 0.7, y: 6.75, w: 8, h: 0.35, fontFace: F, fontSize: 10, color: MUT });
+  // 2. números
+  var s2 = base(2);
+  [['Processos ativos', 'nAtivos'], ['Novos no período', 'nNovos'], ['Arquivados no período', 'nArq'], ['Audiências realizadas', 'nAud'], ['Trabalho jurídico registrado', 'nHoras']].forEach(function (k, j) { kpi(s2, 0.6 + j * 2.45, 2.2, 2.3, k[0], val(k[1]), j === 4 ? CIANO : BR); });
+  texto(s2, 'Um resumo executivo do período: volume de processos, movimentação no ano, audiências e dedicação da equipe ao cliente.', 0.6, 4.1, 12, 0.8, 14, { color: MUT });
+  // 3. proteção patrimonial (seção clara, como no site)
+  var s3 = p.addSlide(); fundo(s3, true); nSlide++;
+  s3.addShape(p.ShapeType.line, { x: 0.6, y: 0.62, w: 0.4, h: 0, line: { color: CIANO, width: 2 } });
+  s3.addText(('03  ·  ' + T[3][0]).toUpperCase(), { x: 1.1, y: 0.45, w: 8, h: 0.34, fontFace: F, fontSize: 10, bold: true, color: '1595AE', charSpacing: 2 });
+  s3.addText([{ text: T[3][1] + ' ', options: { color: '0B1A20' } }, { text: T[3][2], options: { color: '1595AE' } }], { x: 0.6, y: 0.85, w: 10.6, h: 0.85, fontFace: F, fontSize: 30, bold: true });
+  if (LOGO) { s3.addShape(p.ShapeType.roundRect, { x: 11.7, y: 0.32, w: 1.3, h: 0.82, rectRadius: 0.12, fill: { color: NEG } }); logo(s3, 11.8, 0.38, 1.1); }
+  [['Valor das causas', 'eCausa', '0B1A20'], ['Valores pagos (condenações e acordos)', 'ePago', 'C2541C'], ['Valores recebidos', 'eRec', '1E8A5A'], ['Saving', 'eSaving', '1E8A5A']].forEach(function (k, j) {
+    var x = 0.6 + j * 3.07; s3.addShape(p.ShapeType.roundRect, { x: x, y: 2.1, w: 2.92, h: 1.5, rectRadius: 0.18, fill: { color: 'FFFFFF' }, line: { color: 'D4DCDF', width: 1 } });
+    s3.addText(k[0].toUpperCase(), { x: x + 0.2, y: 2.25, w: 2.55, h: 0.4, fontFace: F, fontSize: 8.5, bold: true, color: '5F6D74', valign: 'top' });
+    s3.addText(val(k[1]), { x: x + 0.2, y: 2.75, w: 2.55, h: 0.65, fontFace: F, fontSize: 20, bold: true, color: k[2], fit: 'shrink' });
+  });
+  s3.addText('Economia de ' + val('ePct') + ' sobre o valor das causas dos processos com resultado', { x: 0.6, y: 3.8, w: 12, h: 0.35, fontFace: F, fontSize: 13, bold: true, color: '1E8A5A' });
+  s3.addText('O QUE ISSO SIGNIFICA', { x: 0.6, y: 4.45, w: 6, h: 0.3, fontFace: F, fontSize: 9.5, bold: true, color: '1595AE', charSpacing: 1.5 });
+  texto(s3, val('eTexto'), 0.6, 4.8, 12.1, 1.9, 16, { color: '1F2D33' });
+  s3.addText(val('titulo'), { x: 0.6, y: 7.05, w: 10, h: 0.3, fontFace: F, fontSize: 8.5, color: '93A0A6' });
+  s3.addText(String(nSlide), { x: 12.2, y: 7.05, w: 0.6, h: 0.3, fontFace: F, fontSize: 8.5, color: '93A0A6', align: 'right' });
+  // 4. riscos
+  var s4 = base(4);
   var areas = [], nums = [], i = 0;
   while (document.querySelector('#raPrev [data-k="area' + i + '"]')) { areas.push(val('area' + i)); nums.push(parseFloat(val('areaN' + i)) || 0); i++; }
-  if (areas.length) s1.addChart(p.ChartType.doughnut, [{ name: 'Processos por área', labels: areas, values: nums }], { x: 0.5, y: 2.9, w: 6.5, h: 4.2, holeSize: 58, showLegend: true, legendPos: 'r', legendFontSize: 13, showPercent: true, dataLabelColor: 'FFFFFF', chartColors: CORES.map(function (x) { return x.slice(1); }) });
-  // economia
-  var s2 = base('Economia obtida (saving)');
-  kpi(s2, 0.5, 1.3, 'Valor das causas', val('eCausa')); kpi(s2, 3.6, 1.3, 'Valores pagos', val('eGasto')); kpi(s2, 6.7, 1.3, 'Saving', val('eSaving'), '2F8F5B'); kpi(s2, 9.8, 1.3, '% de economia', val('ePct'), '2F8F5B');
-  var ps = parseFloat(val('ePct').replace(',', '.')) || 0;
-  s2.addChart(p.ChartType.doughnut, [{ name: 'Saving', labels: ['Economia (saving)', 'Pago'], values: [ps, Math.max(0, 100 - ps)] }], { x: 0.5, y: 2.9, w: 6.5, h: 4.2, holeSize: 58, showLegend: true, legendPos: 'r', legendFontSize: 13, showPercent: true, dataLabelColor: 'FFFFFF', chartColors: ['2F8F5B', 'B3792A'] });
-  if (val('eDisc')) s2.addText(val('eDisc'), { x: 7.3, y: 6.3, w: 5.5, h: 0.8, fontFace: 'Montserrat', fontSize: 11, italic: true, color: CINZA });
-  // horas
-  var s3 = base('Horas trabalhadas');
+  if (areas.length) s4.addChart(p.ChartType.doughnut, [{ name: 'Processos por área', labels: areas, values: nums }], Object.assign({ x: 0.5, y: 1.9, w: 6.0, h: 4.9, holeSize: 62, showLegend: true, legendPos: 'b', legendFontSize: 12, showPercent: true, dataLabelColor: 'FFFFFF', chartColors: [CIANO, '364B9B', '1E5C6B', 'A9E3EF', 'F59A5B', '3DCB8B', '7A8297'] }, eixo));
+  card(s4, 6.9, 1.95, 5.85, 4.85);
+  texto(s4, val('riscoTxt'), 7.15, 2.15, 5.35, 1.6, 17, { bold: true, color: BR });
+  rotulo(s4, 'Fatores que originam as demandas', 7.15, 3.85, 5.3); texto(s4, val('riscoAnalise') || '—', 7.15, 4.2, 5.35, 2.4, 13);
+  // 5. consultivo
+  var linC = []; for (i = 0; i < RA_CONS; i++) { var r = [val('ct' + i + 'a'), val('ct' + i + 'b'), val('ct' + i + 'c'), val('ct' + i + 'd')]; if (r.some(Boolean)) linC.push(r); }
+  var s5 = base(5);
+  if (linC.length) tabela(s5, ['Tema', 'Problema enfrentado', 'Orientação prestada', 'Próximo cuidado recomendado'], linC, 2.0); else texto(s5, 'Sem consultorias registradas no período.', 0.6, 2.1, 12, 1, 14);
+  // 6. dedicação
+  var s6 = base(6);
   var labs = d.horas.meses.map(function (m) { return mesNome(m.mes); });
   var hc = d.horas.meses.map(function (m, j) { return Math.round(horasNum(val('hc' + j)) * 100) / 100; }), hp = d.horas.meses.map(function (m, j) { return Math.round(horasNum(val('hp' + j)) * 100) / 100; });
-  s3.addChart(p.ChartType.bar, [{ name: 'Consultivo', labels: labs, values: hc }, { name: 'Processual', labels: labs, values: hp }], { x: 0.4, y: 1.2, w: 8.2, h: 5.8, barGrouping: 'stacked', chartColors: [AZUL, CIANO], showLegend: true, legendPos: 'b', catAxisLabelFontSize: 10, valAxisLabelFontSize: 10, valAxisTitle: 'horas', showValAxisTitle: true });
-  var rows = [[{ text: '', options: { fill: { color: 'FFFFFF' } } }, { text: 'Consultivo', options: { bold: true, color: 'FFFFFF', fill: { color: AZUL } } }, { text: 'Processual', options: { bold: true, color: 'FFFFFF', fill: { color: AZUL } } }],
-    [{ text: 'Total', options: { bold: true } }, val('hcT'), val('hpT')], [{ text: 'Média mensal', options: { bold: true } }, val('hcM'), val('hpM')]];
-  s3.addTable(rows, { x: 8.9, y: 1.6, w: 4.1, colW: [1.5, 1.3, 1.3], fontFace: 'Montserrat', fontSize: 12, border: { type: 'solid', color: 'E5E8EF', pt: 1 }, rowH: 0.5 });
-  // consultorias e conclusão
-  [['Consultorias realizadas no período', val('consult')], ['Conclusão', val('conclusao')]].forEach(function (x) {
-    var s = base(x[0]); s.addText(x[1], { x: 0.8, y: 1.4, w: 11.7, h: 5.4, fontFace: 'Montserrat', fontSize: 18, color: '16203A', valign: 'top', paraSpaceAfter: 8 });
-  });
-  var nome = 'Relatorio_Anual_' + d.cliente.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^\w]+/g, '_') + '_' + d.de + '_a_' + d.ate + '.pptx';
+  s6.addChart(p.ChartType.bar, [{ name: 'Consultivo', labels: labs, values: hc }, { name: 'Processual', labels: labs, values: hp }], Object.assign({ x: 0.4, y: 1.9, w: 7.4, h: 5.0, barGrouping: 'stacked', barGapWidthPct: 60, chartColors: [CIANO, '364B9B'], showLegend: true, legendPos: 'b', catAxisLabelFontSize: 9, valAxisLabelFontSize: 9 }, eixo));
+  kpi(s6, 8.1, 1.95, 1.5, 'Consultivo', val('hcT'), null, 19); kpi(s6, 9.67, 1.95, 1.5, 'Processual', val('hpT'), null, 19); kpi(s6, 11.24, 1.95, 1.5, 'Média/mês', val('hMed'), CIANO, 19);
+  rotulo(s6, 'Picos de atividade', 8.1, 3.6, 4.6); texto(s6, [val('picoTxt'), val('picoMotivo')].filter(Boolean).join(' '), 8.1, 3.95, 4.65, 1.2, 12);
+  rotulo(s6, 'Principais entregas', 8.1, 5.15, 4.6); texto(s6, val('entregas'), 8.1, 5.5, 4.65, 1.5, 11);
+  // 7. prioridades
+  var linP = []; for (i = 0; i < RA_PRI; i++) { var q = [val('pr' + i + 'a'), val('pr' + i + 'b'), val('pr' + i + 'c'), val('pr' + i + 'd')]; if (q.some(Boolean)) linP.push(q); }
+  var s7 = base(7);
+  if (linP.length) tabela(s7, ['Prioridade', 'Medida recomendada', 'Responsável', 'Indicador de acompanhamento'], linP, 2.0);
+  // 8. encerramento (como o "próximo passo" do site)
+  var s8 = p.addSlide(); fundo(s8); nSlide++;
+  logo(s8, 5.9, 0.7, 1.55);
+  s8.addText(('08  ·  ' + T[8][0]).toUpperCase(), { x: 0.6, y: 1.75, w: 12.1, h: 0.34, fontFace: F, fontSize: 10, bold: true, color: CIANO, charSpacing: 2, align: 'center' });
+  s8.addText([{ text: T[8][1] + ' ', options: { color: BR } }, { text: T[8][2], options: { color: CIANO } }], { x: 0.6, y: 2.1, w: 12.1, h: 0.9, fontFace: F, fontSize: 32, bold: true, align: 'center' });
+  s8.addText(val('encerra'), { x: 1.4, y: 3.15, w: 10.5, h: 2.1, fontFace: F, fontSize: 15, color: TX, align: 'center', valign: 'top', fit: 'shrink' });
+  if (val('proxCiclo')) { s8.addShape(p.ShapeType.roundRect, { x: 2.6, y: 5.5, w: 8.1, h: 0.75, rectRadius: 0.37, fill: { color: CIANO } }); s8.addText(val('proxCiclo'), { x: 2.7, y: 5.5, w: 7.9, h: 0.75, fontFace: F, fontSize: 12.5, bold: true, color: '031014', align: 'center', valign: 'middle', fit: 'shrink' }); }
+  s8.addText('Domingues & Herold Advogados  ·  dhlaw.com.br', { x: 0.6, y: 6.85, w: 12.1, h: 0.3, fontFace: F, fontSize: 9.5, color: MUT, align: 'center' });
+  var nome = 'Relatorio_Gestao_Juridica_' + d.cliente.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w]+/g, '_') + '_' + d.de + '_a_' + d.ate + '.pptx';
   p.writeFile({ fileName: nome }).then(function () { toast('PowerPoint gerado: ' + nome); }, function (e) { toast('Falha ao gerar o PowerPoint: ' + e.message, true); });
-};
+}
 
 /* ---------- início ---------- */
 document.addEventListener('crm:perfil', function (ev) {
