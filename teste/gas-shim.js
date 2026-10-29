@@ -769,7 +769,7 @@
           if (cab) ctx.drawImage(canvas, 0, Math.round(sl.tb.ht * SCALE), canvas.width, Math.round(cab * SCALE), 0, 0, part.width, Math.round(cab * SCALE));
           ctx.drawImage(canvas, 0, Math.round(sl.y0 * SCALE), canvas.width, Math.round(h * SCALE), 0, Math.round(cab * SCALE), part.width, Math.round(h * SCALE));
           if (idx > 0) pdf.addPage();
-          pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, sl.top * k, pw, (h + cab) * k);
+          pdf.addImage(part.toDataURL('image/jpeg', 0.96), 'JPEG', 0, sl.top * k, pw, (h + cab) * k, undefined, 'FAST');
         });
         return String(pdf.output('datauristring')).split(',')[1];
       });
@@ -804,7 +804,7 @@
       fr.style.height = fullH + 'px';
       // Relatórios novos (body data-pdf="v2"): margens nas páginas seguintes, blocos que não podem ser cortados
       // (data-nobreak), título que não fica sozinho no fim da página (data-keepnext) e cabeçalho da tabela repetido.
-      if (body.getAttribute('data-pdf') === 'v2') return pdfV2(win, doc, body, fullH, W, PAGE_H, SCALE);
+      if (body.getAttribute('data-pdf') === 'v2') return pdfV2(win, doc, body, fullH, W, PAGE_H, fullH * 3 > 30000 ? 2 : 3); // mais nítido (relatório muito longo volta para 2x)
       // pontos onde dá para quebrar a página (fim de linhas, parágrafos, blocos)
       var cuts = [];
       [].forEach.call(body.querySelectorAll('tr,p,li,h1,h2,h3,h4,table,img,div'), function (el) {
