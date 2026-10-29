@@ -8,8 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=CTRL1"></script>
-<script src="gas-shim.js?v=CTRL1"></script>
+<script src="config.js?v=CTRL2"></script>
+<script src="gas-shim.js?v=CTRL2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Layout: sidebar fixo (igual ao CRM real) + topbar + área de conteúdo com telas que trocam por clique no menu.
    Paleta e tipografia reaproveitadas 1:1 do CRM Financeiro DH LAW em produção, para parecer parte do mesmo sistema. */
@@ -234,6 +235,11 @@ body.lg-open{overflow:hidden;}
 .adv-mail input{padding:6px 9px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;width:210px;font-family:inherit;}
 .ra-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
 .toast.err{background:#9B2C2C;}
+
+.fc-status{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px;}
+.fc-status .big{font-size:15px;font-weight:700;color:var(--dh-marinho);}
+.fc-res{margin-top:14px;padding:12px 14px;border-radius:8px;background:var(--bg);font-size:12.5px;line-height:1.6;}
+.fc-res.warn{background:var(--warn-bg);}
 td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;font-family:inherit;}
 </style>
 </head>
@@ -328,7 +334,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
       <!-- CUSTAS -->
       <section class="view" id="v-custas">
         <h1>Custas e audiências</h1>
-        <p class="sub">Lançamento direto: ao salvar, o valor já entra no Contas a Receber do cliente.</p>
+        <p class="sub">Lance no dia a dia. Entram no Contas a Receber do <b>mês seguinte</b> quando você sincronizar no Fechamento do mês.</p>
         <div class="card" id="cuCard">
           <h2><span class="t" id="cuTitulo">Novo lançamento</span></h2>
           <input type="hidden" id="cu_ID">
@@ -338,7 +344,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
             <div><label>Categoria</label><select id="cu_Categoria"></select></div>
             <div><label>Data</label><input type="date" id="cu_Data"></div>
             <div><label>Valor (R$)</label><input id="cu_Valor" placeholder="0,00"></div>
-            <div><label>Cobrar do cliente?</label><select id="cu_Cobravel"><option value="Sim">Sim, vai para o Receber</option><option value="Não">Não (despesa interna)</option></select></div>
+            <div><label>Cobrar do cliente?</label><select id="cu_Cobravel"><option value="Sim">Sim, cobrar do cliente</option><option value="Não">Não (despesa interna)</option></select></div>
           </div>
           <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição</label><input id="cu_Descricao" placeholder="Guia de preparo do recurso, audiência de conciliação…"></div><div class="wide" style="grid-column:span 2"><label>Link do comprovante (opcional)</label><input id="cu_DocumentoLink" placeholder="https://drive.google.com/…"></div></div>
           <div class="btn-row"><button class="btn" id="cuBtn" onclick="salvarCusta()">+ Lançar</button><button class="btn ghost" id="cuCancel" style="display:none" onclick="limparCusta()">Cancelar edição</button></div>
@@ -349,12 +355,41 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
         </div>
       </section>
 
-      <!-- CONSULTIVO E HORAS -->
+      <!-- FECHAMENTO DO MÊS -->
       <section class="view" id="v-horas">
-        <h1>Consultivo e horas</h1>
-        <p class="sub">Lance as atividades quando quiser, sem esperar o fim do mês. Quando um cliente passa das horas contratadas, ele aparece abaixo para você validar a cobrança.</p>
+        <h1>Fechamento do mês</h1>
+        <p class="sub">Tudo o que for feito no mês (horas, custas, audiências, processos) é cobrado no mês seguinte. Suba a planilha quantas vezes quiser e sincronize com o Financeiro quando quiser: nada é duplicado.</p>
+        <div class="card" id="fcTopo">
+          <h2><span class="t">Competência</span>
+            <span class="btn-row"><input type="month" id="hrMes" onchange="carregarResumo()" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit"></span></h2>
+          <div id="fcStatus" class="fc-status"></div>
+          <div class="btn-row" style="margin-top:14px">
+            <button class="btn sync" id="fcSync" onclick="sincronizar()">🔄 Sincronizar com o Financeiro</button>
+            <label class="btn ghost" style="cursor:pointer">📥 Subir planilha (semana ou mês)<input type="file" id="fcArquivo" accept=".xlsx,.xls" style="display:none" onchange="subirPlanilha(this)"></label>
+          </div>
+          <p class="example-note" style="margin:12px 0 0">A planilha é a mesma do fechamento de hoje (abas <b>CONSULTIVO</b> e <b>PROCESSUAL E EXTRAS</b>). As tarefas do período do arquivo substituem as que já estavam nesse período; os extras de cada cliente do arquivo substituem os anteriores.</p>
+          <div id="fcResultado"></div>
+        </div>
+        <div class="card">
+          <h2><span class="t" id="fcTituloTabela">Clientes no mês</span></h2>
+          <p class="example-note" style="margin-top:-8px">Excedente = consultivo acima das horas contratadas. O valor de cada cobrança é calculado pelo Financeiro a partir do contrato.</p>
+          <div class="tbl-wrap" id="hrResumo"></div>
+        </div>
+        <div class="card" id="exCard">
+          <h2><span class="t" id="exTitulo">Extras do cliente no mês</span></h2>
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="ex_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Horas processuais (hh:mm)</label><input id="ex_HorasProcessual" placeholder="05:30"></div>
+            <div><label>Audiências realizadas (qtd)</label><input id="ex_Audiencias" placeholder="0"></div>
+            <div><label>Excesso de processos (qtd)</label><input id="ex_ExcessoProcessos" placeholder="0"></div>
+            <div><label>Reembolso de custas (R$)</label><input id="ex_Custas" placeholder="0,00"></div>
+          </div>
+          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição das audiências</label><input id="ex_DescricaoAudiencias" placeholder="30/09/2026 - 14:10 - 1VT ... Audiência UNA"></div><div class="wide" style="grid-column:span 2"><label>Descrição das custas</label><input id="ex_DescricaoCustas" placeholder="Correio: notificação extrajudicial"></div></div>
+          <div class="btn-row"><button class="btn" onclick="salvarExtras()">Salvar extras</button><button class="btn ghost" onclick="limparExtras()">Limpar</button></div>
+          <p class="example-note" style="margin:10px 0 0">Custas e audiências lançadas na tela "Custas e audiências" entram sozinhas. Aqui vai só o que não foi lançado lá (ou o que veio da planilha), para não contar duas vezes.</p>
+        </div>
         <div class="card" id="hrCard">
-          <h2><span class="t" id="hrTitulo">Registrar atividade</span></h2>
+          <h2><span class="t" id="hrTitulo">Incluir / ajustar tarefa</span></h2>
           <input type="hidden" id="hr_ID">
           <div class="formrow">
             <div><label>Cliente</label><div class="cp"><input id="hr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
@@ -363,15 +398,10 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
             <div><label>Tempo gasto</label><input id="hr_Duracao" placeholder="1:30"></div>
             <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="hr_Tarefa" placeholder="Revisão de contrato de locação"></div>
           </div>
-          <div class="btn-row"><button class="btn" id="hrBtn" onclick="salvarHoras()">+ Registrar</button><button class="btn ghost" id="hrCancel" style="display:none" onclick="limparHoras()">Cancelar edição</button></div>
-        </div>
-        <div class="card">
-          <h2><span class="t">Horas do mês por cliente</span><span class="btn-row"><input type="month" id="hrMes" onchange="carregarResumo()" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit"></span></h2>
-          <p class="example-note" style="margin-top:-8px">Excedente = consultivo acima das horas contratadas. "Validar" lança a cobrança no Contas a Receber (o valor é calculado pelo Financeiro a partir do contrato). "Não cobrar" registra a decisão, com o motivo.</p>
-          <div class="tbl-wrap" id="hrResumo"></div>
+          <div class="btn-row"><button class="btn" id="hrBtn" onclick="salvarHoras()">+ Incluir tarefa</button><button class="btn ghost" id="hrCancel" style="display:none" onclick="limparHoras()">Cancelar edição</button></div>
         </div>
         <div class="card" style="padding:0">
-          <div class="toolbar"><b style="font-size:14px">Lançamentos do mês</b><input id="hrBusca" placeholder="Filtrar por cliente ou tarefa…" oninput="renderHoras()"></div>
+          <div class="toolbar"><b style="font-size:14px">Tarefas da competência</b><input id="hrBusca" placeholder="Filtrar por cliente, tarefa ou advogado…" oninput="renderHoras()"></div>
           <div class="tbl-wrap" id="hrTabela"></div>
         </div>
       </section>
@@ -421,6 +451,6 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
 </div>
 <div class="toast" id="toast"></div>
 
-<script src="controladoria-tela.js?v=CTRL1"></script>
+<script src="controladoria-tela.js?v=CTRL2"></script>
 </body>
 </html>
