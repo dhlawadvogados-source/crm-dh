@@ -322,6 +322,22 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
 #raPrev .ra-eyebrow span{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;border-radius:6px;background:var(--dh-azul);color:#fff;font-size:10.5px;}
 #raPrev .ra-h{font-size:17px;font-weight:800;color:var(--ink);margin:0 0 14px;padding-bottom:8px;border-bottom:1.5px solid var(--line);text-transform:none;letter-spacing:0;}
 #raPrev .ra-h em{font-style:normal;color:var(--dh-azul);}
+.pn-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.pn-grupo{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dh-azul);font-weight:800;margin:18px 0 10px;}
+.stat.link{cursor:pointer;transition:transform .12s,box-shadow .12s;}
+.stat.link:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(20,29,63,.10);}
+.pn-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+.pn-cols .card{margin:0;}
+@media(max-width:1000px){.pn-cols{grid-template-columns:1fr;}}
+.pn-bars{display:flex;align-items:flex-end;gap:10px;height:170px;padding:10px 4px 0;}
+.pn-bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;cursor:pointer;}
+.pn-bar .stk{width:100%;max-width:46px;display:flex;flex-direction:column-reverse;border-radius:6px 6px 0 0;overflow:hidden;background:#EEF1FA;}
+.pn-bar .stk i{display:block;}
+.pn-bar small{font-size:10.5px;color:var(--muted);white-space:nowrap;}
+.pn-bar b{font-size:10.5px;color:var(--ink);}
+.pn-bar.on small{color:var(--dh-azul);font-weight:800;}
+.pn-leg{display:flex;gap:16px;font-size:11.5px;color:var(--muted);margin-top:10px;}
+.pn-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
 </style>
 </head>
 <body class="lg-open">
@@ -422,11 +438,18 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
 
       <!-- PAINEL -->
       <section class="view on" id="v-painel">
-        <h1>Painel da Controladoria</h1>
-        <p class="sub">Visão geral do mês, sem valores financeiros: só situação e quantidades.</p>
-        <div class="stats" id="pnStats"></div>
-        <div class="card"><h2><span class="t">Clientes acima das horas contratadas</span><button class="btn ghost sm" onclick="goTab('consultivo')">Ir para Consultivo</button></h2><div class="tbl-wrap" id="pnExced"></div></div>
-        <div class="card"><h2><span class="t">Pendências de reconciliação</span></h2><p class="example-note" style="margin-top:-8px">Avisos automáticos quando algo não fecha com o Financeiro (ex.: cliente sem valor de hora extra, custa já recebida).</p><div class="tbl-wrap" id="pnPend"></div></div>
+        <div class="pn-top"><div><h1>Painel da Controladoria</h1>
+        <p class="sub">Tudo o que foi lançado no sistema, mês a mês: consultivo, processual, custas, audiências e equipe. Sem valores de contrato do cliente.</p></div>
+        <label class="mes-lbl">Mês <input type="month" id="pnMes" onchange="mudarComp(this.value)"></label></div>
+        <div class="pn-grupo">Consultivo</div><div class="stats" id="pnCons"></div>
+        <div class="pn-grupo">Processual</div><div class="stats" id="pnProc"></div>
+        <div class="pn-grupo">Custas, audiências e equipe</div><div class="stats" id="pnOutros"></div>
+        <div class="pn-cols">
+          <div class="card"><h2><span class="t">Clientes acima das horas contratadas</span><button class="btn ghost sm" onclick="goTab('consultivo')">Consultivo</button></h2><div class="tbl-wrap" id="pnExced"></div></div>
+          <div class="card"><h2><span class="t">Processos acima do contrato</span><button class="btn ghost sm" onclick="goTab('processos')">Processual</button></h2><div class="tbl-wrap" id="pnProcExc"></div></div>
+        </div>
+        <div class="card"><h2><span class="t" id="pnAnoT">Horas no ano</span></h2><div id="pnAno"></div></div>
+        <div class="card"><h2><span class="t">Pendências de reconciliação</span></h2><p class="example-note" style="margin-top:-8px">Avisos automáticos para o Financeiro (ex.: processo extra para cobrar à parte, cliente sem valor de hora extra).</p><div class="tbl-wrap" id="pnPend"></div></div>
       </section>
 
       <!-- CLIENTES -->
@@ -586,6 +609,6 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
 <div class="mbg" id="md_ver" onclick="if(event.target===this)fecharModal('md_ver')"><div class="mdl"><h2><button class="mx" type="button" onclick="fecharModal('md_ver')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="verTitulo"></span></h2><div id="verCorpo"></div></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="controladoria-tela.js?v=CTRL14"></script>
+<script src="controladoria-tela.js?v=CTRL15"></script>
 </body>
 </html>

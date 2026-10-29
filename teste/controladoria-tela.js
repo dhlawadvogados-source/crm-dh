@@ -175,23 +175,63 @@ window.mudarComp = function (v) {
 
 /* ---------- painel ---------- */
 REND.pend = function () { renderPainel(); };
+function stat(lb, val, hint, tab, warn) { return '<div class="stat link' + (warn ? ' warn' : '') + '" onclick="goTab(\'' + tab + '\')"><div class="lb">' + lb + '</div><div class="val">' + val + '</div><div class="hint">' + hint + '</div></div>'; }
 function renderPainel() {
-  if (!RESUMO) return;
-  var comp = RESUMO.competencia, l = RESUMO.clientes, sinc = RESUMO.sincronizacao || {};
-  var comTarefa = l.filter(function (c) { return c.tarefas > 0; });
-  var horas = l.reduce(function (s, c) { return s + hDec(c.consultivo); }, 0), tarefas = l.reduce(function (s, c) { return s + c.tarefas; }, 0);
+  if (!RESUMO || !D) return;
+  var comp = RESUMO.competencia, cob = RESUMO.cobrancaEm, l = RESUMO.clientes;
+  if ($('pnMes')) $('pnMes').value = comp;
+  var hist = comp < '2026-10';
+  // consultivo do mês (todas as pastas)
+  var tc = D.consultivo.filter(function (c) { return c.Competencia === comp; });
+  var hc = tc.reduce(function (a, c) { return a + hDec(c.Duracao); }, 0);
+  var cliCons = {}; tc.forEach(function (c) { cliCons[norm(c.Cliente)] = 1; });
   var exc = l.filter(function (c) { return c.excedenteDec > 0; });
-  var aguard = D.custas.filter(function (c) { return c.Status === 'Lançado'; }).length;
-  var pend = D.pendencias.filter(function (p) { return p.Status === 'Aberta'; });
-  $('pnStats').innerHTML =
-    '<div class="stat"><div class="lb">Clientes com horas em ' + mesNome(comp) + '</div><div class="val">' + comTarefa.length + ' <span style="font-size:15px;color:var(--muted);font-weight:600">de ' + l.length + '</span></div><div class="hint">contratos mensais no fechamento</div></div>' +
-    '<div class="stat"><div class="lb">Horas de consultivo</div><div class="val">' + decHm(horas) + '</div><div class="hint">' + tarefas + ' tarefa(s)</div></div>' +
-    '<div class="stat' + (exc.length ? ' warn' : '') + '"><div class="lb">Acima do contratado</div><div class="val">' + exc.length + '</div><div class="hint">cobrança em ' + mesNome(RESUMO.cobrancaEm) + '</div></div>' +
-    '<div class="stat"><div class="lb">Horas processuais</div><div class="val">' + decHm(l.reduce(function (a, c) { return a + hDec(c.horasProcessual); }, 0)) + '</div><div class="hint">' + l.filter(function (c) { return hDec(c.horasProcessual) > 0; }).length + ' cliente(s)</div></div>' +
-    '<div class="stat"><div class="lb">Processos acima do contrato</div><div class="val">' + l.filter(function (c) { return c.excessoProcessos > 0; }).length + '</div><div class="hint">cliente(s) · cobrança em ' + mesNome(RESUMO.cobrancaEm) + '</div></div>';
-  $('pnExced').innerHTML = exc.length ? '<table><thead><tr><th>Cliente</th><th>Contratadas</th><th>Consultivo</th><th>Excedente</th></tr></thead><tbody>' +
-    exc.map(function (c) { return '<tr><td class="cliente">' + esc(c.cliente) + (c.travado ? ' <span class="badge ok">cobrado · travado</span>' : '') + '</td><td>' + hm(c.contratadas) + '</td><td>' + hm(c.consultivo) + '</td><td><b>' + hm(c.excedente) + '</b></td></tr>'; }).join('') + '</tbody></table>'
+  var advs = {}; tc.forEach(function (c) { if (c.Responsavel) advs[c.Responsavel] = 1; });
+  $('pnCons').innerHTML =
+    stat('Horas de consultivo em ' + mesNome(comp), decHm(hc), tc.length + ' tarefa(s) · ' + Object.keys(advs).length + ' advogado(s)', 'consultivo') +
+    stat('Clientes com lançamento', Object.keys(cliCons).length, 'pastas de consultivo com horas no mês', 'consultivo') +
+    stat('Acima das horas contratadas', exc.length, hist ? 'mês só de histórico' : 'excedente vai para o Receber de ' + mesNome(cob), 'consultivo', exc.length > 0);
+  // processual
+  var ps = pastas(), ativos = D.processos.filter(function (p) { return p.Situacao !== 'Arquivado'; });
+  var novos = D.processos.filter(function (p) { return String(isoData(p.DataInicio)).slice(0, 7) === comp; }).length;
+  var arq = D.processos.filter(function (p) { return p.Situacao === 'Arquivado' && String(isoData(p.DataEncerramento)).slice(0, 7) === comp; }).length;
+  var tp = (D.tarefasProcessual || []).filter(function (t) { return t.Competencia === comp; }), hp = tp.reduce(function (a, t) { return a + hDec(t.Duracao); }, 0);
+  var pexc = ps.filter(function (f) { return f.excedente > 0; }), aParte = ativos.filter(procAParte).length;
+  $('pnProc').innerHTML =
+    stat('Processos ativos', ativos.length, novos + ' novo(s) e ' + arq + ' arquivado(s) em ' + mesNome(comp), 'processos') +
+    stat('Horas processuais', decHm(hp), tp.length + ' tarefa(s) em ' + mesNome(comp), 'processos') +
+    stat('Clientes acima do contrato', pexc.length, 'processos excedentes em ' + mesNome(comp), 'processos', pexc.length > 0) +
+    stat('Processos extras (à parte)', aParte, 'cobrados à parte pelo Financeiro', 'processos');
+  // custas, audiências e equipe
+  var cu = D.custas.filter(function (c) { return c.Status !== 'Cancelado' && String(c.Data).slice(0, 7) === comp; });
+  var aud = cu.filter(function (c) { return /audi/i.test(c.Categoria); }).length, outras = cu.length - aud;
+  var vc = cu.filter(function (c) { return !/audi/i.test(c.Categoria) && c.Cobravel === 'Sim'; }).reduce(function (a, c) { return a + moneyN(c.Valor); }, 0);
+  var h0 = hoje(), em30 = new Date(Date.parse(h0) + 30 * 864e5).toISOString().slice(0, 10);
+  var deFerias = (D.feriasHistorico || []).filter(function (f) { return isoData(f.Inicio) <= h0 && isoData(f.Fim) >= h0; });
+  var proximas = (D.feriasHistorico || []).filter(function (f) { return isoData(f.Inicio) > h0 && isoData(f.Inicio) <= em30; });
+  $('pnOutros').innerHTML =
+    stat('Custas e despesas', outras, (vc ? brl(vc) + ' a reembolsar' : 'nenhum valor a reembolsar') + ' em ' + mesNome(comp), 'processos') +
+    stat('Audiências', aud, 'lançadas em ' + mesNome(comp), 'processos') +
+    stat('De férias agora', deFerias.length, deFerias.length ? deFerias.map(function (f) { return esc(f.Nome); }).join(', ') : (proximas.length ? 'próximas: ' + proximas.map(function (f) { return esc(f.Nome) + ' (' + fmtDCurta(f.Inicio) + ')'; }).join(', ') : 'ninguém nos próximos 30 dias'), 'ferias');
+  // listas
+  $('pnExced').innerHTML = exc.length ? '<table><thead><tr><th>Cliente</th><th>Contratadas</th><th>Trabalhadas</th><th>Excedente</th></tr></thead><tbody>' +
+    exc.map(function (c) { return '<tr class="pasta-row" onclick="abrirPastaCo(\'' + jsq(c.cliente) + '\')"><td class="cliente">' + esc(c.cliente) + (c.travado ? ' <span class="badge ok">já cobrado</span>' : '') + '</td><td>' + hm(c.contratadas) + '</td><td>' + hm(c.consultivo) + '</td><td><b style="color:var(--warn)">' + hm(c.excedente) + '</b></td></tr>'; }).join('') + '</tbody></table>'
     : vazio('Nenhum cliente acima das horas contratadas em ' + mesNome(comp) + '.');
+  $('pnProcExc').innerHTML = pexc.length ? '<table><thead><tr><th>Cliente</th><th>Contratados</th><th>Em uso</th><th>Acima</th></tr></thead><tbody>' +
+    pexc.map(function (f) { return '<tr class="pasta-row" onclick="abrirPasta(\'' + jsq(f.nome) + '\')"><td class="cliente">' + esc(f.nome) + '</td><td>' + f.contratados + '</td><td>' + f.usados + '</td><td><b style="color:var(--warn)">+' + f.excedente + '</b></td></tr>'; }).join('') + '</tbody></table>'
+    : vazio('Nenhum cliente acima dos processos contratados em ' + mesNome(comp) + '.');
+  // ano: horas mês a mês (consultivo + processual), de janeiro até o mês escolhido
+  var ano = comp.slice(0, 4), meses = [], max = 0;
+  for (var m = 1; m <= 12; m++) { var k = ano + '-' + ('0' + m).slice(-2); if (k > comp && k > mesAtual()) break;
+    var c1 = D.consultivo.filter(function (c) { return c.Competencia === k; }).reduce(function (a, c) { return a + hDec(c.Duracao); }, 0);
+    var p1 = (D.tarefasProcessual || []).filter(function (t) { return t.Competencia === k; }).reduce(function (a, t) { return a + hDec(t.Duracao); }, 0);
+    meses.push({ k: k, c: c1, p: p1 }); max = Math.max(max, c1 + p1); }
+  var totA = meses.reduce(function (a, x) { return a + x.c + x.p; }, 0);
+  $('pnAnoT').textContent = 'Horas registradas em ' + ano + ' · ' + decHm(totA);
+  $('pnAno').innerHTML = '<div class="pn-bars">' + meses.map(function (x) { var t = x.c + x.p, hh = max ? Math.round(t / max * 120) : 0;
+    return '<div class="pn-bar' + (x.k === comp ? ' on' : '') + '" onclick="mudarComp(\'' + x.k + '\')" title="' + mesNome(x.k) + ': consultivo ' + decHm(x.c) + ' · processual ' + decHm(x.p) + '"><b>' + (t ? decHm(t) : '') + '</b><div class="stk" style="height:' + Math.max(hh, 2) + 'px"><i style="height:' + (t ? Math.round(x.c / t * 100) : 0) + '%;background:var(--dh-azul)"></i><i style="height:' + (t ? Math.round(x.p / t * 100) : 0) + '%;background:var(--dh-ciano)"></i></div><small>' + mesNome(x.k).slice(0, 3) + '</small></div>'; }).join('') + '</div>' +
+    '<div class="pn-leg"><span><i style="background:var(--dh-azul)"></i>Consultivo</span><span><i style="background:var(--dh-ciano)"></i>Processual</span><span>Clique num mês para ver os números dele. Jan a set/2026: só histórico (sem integração com o Financeiro).</span></div>';
+  var pend = D.pendencias.filter(function (p) { return p.Status === 'Aberta'; });
   var PP = paginar('pend', pend);
   $('pnPend').innerHTML = pend.length ? '<table><thead><tr><th>Data</th><th>Cliente</th><th>Mensagem</th><th></th></tr></thead><tbody>' +
     PP.itens.map(function (p) { return '<tr><td>' + fmtD(p.DataDeteccao) + '</td><td class="cliente">' + esc(p.Cliente) + '</td><td>' + esc(p.Mensagem) + '</td><td class="acts"><button class="lnk" onclick="resolverPend(\'' + esc(p.ID) + '\')">Marcar resolvida</button></td></tr>'; }).join('') + '</tbody></table>' + PP.pager
