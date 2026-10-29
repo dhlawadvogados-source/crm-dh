@@ -731,6 +731,49 @@
       document.head.appendChild(s);
     });
   }
+  function pdfV2(win, doc, body, fullH, W, PAGE_H, SCALE) {
+    var MT = 36, MB = 28;
+    function rr(el) { var r = el.getBoundingClientRect(); return { t: Math.round(r.top), b: Math.round(r.bottom) }; }
+    var cuts = [], evitar = [], titulos = [], tabelas = [];
+    [].forEach.call(body.querySelectorAll('tr,p,li,table,img,div'), function (el) { var r = rr(el); if (r.b > r.t) { cuts.push(r.t); cuts.push(r.b); } });
+    [].forEach.call(body.querySelectorAll('[data-nobreak]'), function (el) { evitar.push(rr(el)); });
+    [].forEach.call(body.querySelectorAll('[data-keepnext]'), function (el) { var r = rr(el); titulos.push({ t: r.t, b: r.b + 70 }); });
+    [].forEach.call(body.querySelectorAll('table'), function (tb) { var th = tb.querySelector('thead'); if (!th) return; var r = rr(tb), h = rr(th); tabelas.push({ t: r.t, b: r.b, ht: h.t, hb: h.b }); });
+    cuts = cuts.filter(function (c) {
+      for (var i = 0; i < evitar.length; i++) if (c > evitar[i].t && c < evitar[i].b) return false;
+      for (var j = 0; j < titulos.length; j++) if (c > titulos[j].t && c <= titulos[j].b) return false;
+      return true;
+    }).sort(function (a, b) { return a - b; });
+    function tabelaEm(y) { for (var i = 0; i < tabelas.length; i++) if (y > tabelas[i].hb && y < tabelas[i].b - 2) return tabelas[i]; return null; }
+    var slices = [], y = 0, pg = 0;
+    while (y < fullH - 2) {
+      var tb = pg > 0 ? tabelaEm(y) : null, cab = tb ? tb.hb - tb.ht : 0;
+      var avail = PAGE_H - (pg > 0 ? MT : 0) - MB - cab, lim = y + avail, end;
+      if (lim < fullH) {
+        var best = -1;
+        for (var i = 0; i < cuts.length; i++) { var c = cuts[i]; if (c > y + avail * 0.45 && c <= lim) best = c; }
+        end = best > 0 ? best : lim;
+      } else end = fullH;
+      slices.push({ y0: y, y1: end, tb: tb, top: pg > 0 ? MT : 0 }); y = end; pg++;
+    }
+    return win.html2canvas(body, { scale: SCALE, backgroundColor: '#ffffff', useCORS: true, width: W, windowWidth: W, height: fullH, windowHeight: fullH, logging: false })
+      .then(function (canvas) {
+        var JsPDF = window.jspdf.jsPDF;
+        var pdf = new JsPDF({ unit: 'pt', format: 'a4', orientation: 'portrait' });
+        var pw = pdf.internal.pageSize.getWidth(), k = pw / W;
+        slices.forEach(function (sl, idx) {
+          var h = sl.y1 - sl.y0, cab = sl.tb ? sl.tb.hb - sl.tb.ht : 0;
+          var part = document.createElement('canvas');
+          part.width = canvas.width; part.height = Math.max(1, Math.round((h + cab) * SCALE));
+          var ctx = part.getContext('2d'); ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, part.width, part.height);
+          if (cab) ctx.drawImage(canvas, 0, Math.round(sl.tb.ht * SCALE), canvas.width, Math.round(cab * SCALE), 0, 0, part.width, Math.round(cab * SCALE));
+          ctx.drawImage(canvas, 0, Math.round(sl.y0 * SCALE), canvas.width, Math.round(h * SCALE), 0, Math.round(cab * SCALE), part.width, Math.round(h * SCALE));
+          if (idx > 0) pdf.addPage();
+          pdf.addImage(part.toDataURL('image/jpeg', 0.92), 'JPEG', 0, sl.top * k, pw, (h + cab) * k);
+        });
+        return String(pdf.output('datauristring')).split(',')[1];
+      });
+  }
   // O relatório é desenhado num iframe isolado (sem o CSS do CRM), fotografado com
   // html2canvas e fatiado em páginas A4 sem cortar linhas de tabela no meio.
   var jsPdfP = null;
@@ -759,6 +802,9 @@
       var body = doc.body;
       var fullH = Math.max(doc.documentElement.scrollHeight, body.scrollHeight, 1);
       fr.style.height = fullH + 'px';
+      // Relatórios novos (body data-pdf="v2"): margens nas páginas seguintes, blocos que não podem ser cortados
+      // (data-nobreak), título que não fica sozinho no fim da página (data-keepnext) e cabeçalho da tabela repetido.
+      if (body.getAttribute('data-pdf') === 'v2') return pdfV2(win, doc, body, fullH, W, PAGE_H, SCALE);
       // pontos onde dá para quebrar a página (fim de linhas, parágrafos, blocos)
       var cuts = [];
       [].forEach.call(body.querySelectorAll('tr,p,li,h1,h2,h3,h4,table,img,div'), function (el) {
