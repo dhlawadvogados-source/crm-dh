@@ -1,0 +1,426 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controladoria · DH LAW</title>
+<link rel="icon" type="image/png" href="logo-dh.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js?v=CTRL1"></script>
+<script src="gas-shim.js?v=CTRL1"></script>
+<style>
+/* Layout: sidebar fixo (igual ao CRM real) + topbar + área de conteúdo com telas que trocam por clique no menu.
+   Paleta e tipografia reaproveitadas 1:1 do CRM Financeiro DH LAW em produção, para parecer parte do mesmo sistema. */
+:root{
+  --dh-azul:#364B9B; --dh-marinho:#141D3F; --dh-marinho2:#1B2652;
+  --dh-ciano:#23B9D6; --dh-ciano-cl:#A9E3EF; --dh-laranja:#F26A2E;
+  --bg:#F3F5F9; --card:#FFFFFF; --ink:#16203A; --muted:#7A8297; --line:#E5E8EF;
+  --ok:#2F8F5B; --ok-bg:#EAF7F0; --warn:#B3792A; --warn-bg:#FDF3E3;
+  --r:8px; --sh:0 1px 2px rgba(20,29,63,.05); --sh2:0 8px 24px rgba(20,29,63,.10);
+  --side:236px;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Montserrat',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  background:var(--bg); color:var(--ink);
+  padding-left:max(0px, env(safe-area-inset-left,0px));
+  padding-right:max(0px, env(safe-area-inset-right,0px));
+}
+a{text-decoration:none;color:inherit;}
+button{font-family:inherit;cursor:pointer;}
+
+/* banner de aviso (mockup, dados de exemplo) */
+
+/* sidebar */
+.shell{display:block;padding-left:var(--side);min-height:100vh;}
+.side{position:fixed;top:0;left:0;bottom:0;width:var(--side);background:var(--dh-marinho);padding:0 0 20px;z-index:40;overflow-y:auto;}
+.side-logo{height:88px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:10px;}
+.side-logo img{height:40px;}
+.side-tag{text-align:center;color:var(--dh-ciano);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin:-4px 0 14px;}
+nav{display:flex;flex-direction:column;gap:2px;}
+nav a{display:flex;align-items:center;gap:10px;border-radius:0;padding:14px 24px;font-size:12px;font-weight:500;
+  text-transform:uppercase;letter-spacing:1.1px;color:#C7CEE4;border-left:4px solid transparent;}
+nav a .ic{width:18px;height:18px;flex:none;}
+nav a:hover{background:rgba(255,255,255,.05);color:#fff;}
+nav a.active{background:var(--dh-marinho2);color:var(--dh-ciano);border-left-color:var(--dh-ciano);font-weight:700;}
+
+/* topbar */
+.topbar{position:sticky;top:30px;z-index:30;background:linear-gradient(120deg,var(--dh-marinho) 0%,var(--dh-marinho2) 100%);
+  height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;color:#fff;}
+.topbar b{font-size:14.5px;font-weight:700;}
+.topbar .who{font-size:12px;color:var(--dh-ciano-cl);}
+
+main{padding:26px 28px 60px;max-width:1180px;}
+h1{font-size:21px;margin:0 0 4px;letter-spacing:-.2px;}
+.sub{color:var(--muted);font-size:13px;margin:0 0 22px;}
+
+.view{display:none;}
+.view.on{display:block;}
+
+/* grid de cards de status */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px;}
+.stat{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px 20px;border-top:3px solid var(--dh-ciano);}
+.stat .lb{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-bottom:8px;}
+.stat .val{font-size:26px;font-weight:800;color:var(--dh-azul);line-height:1;}
+.stat .hint{font-size:12px;color:var(--muted);margin-top:6px;}
+.stat.warn{border-top-color:var(--dh-laranja);}
+.stat.warn .val{color:var(--dh-laranja);}
+
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:20px 22px;margin-bottom:18px;}
+.card h2{font-size:15px;margin:0 0 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.card h2 span.t{font-weight:700;}
+
+.btn{background:var(--dh-azul);color:#fff;border:0;border-radius:6px;padding:10px 16px;font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.6px;}
+.btn:hover{background:#2B3D82;}
+.btn.ghost{background:transparent;color:var(--dh-azul);border:1.5px solid var(--dh-azul);}
+.btn.sync{background:var(--dh-ciano);color:#0B2E36;}
+.btn.sync:hover{background:#1ea3bd;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.search{display:flex;gap:10px;margin-bottom:16px;}
+.search input{flex:1;min-width:0;padding:11px 14px;border:1.5px solid var(--line);border-radius:6px;font-size:13.5px;font-family:inherit;}
+.search input:focus{outline:2px solid var(--dh-ciano);border-color:var(--dh-ciano);}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;
+  padding:0 10px 10px;border-bottom:1.5px solid var(--line);}
+td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+tr:last-child td{border-bottom:0;}
+.tbl-wrap{overflow-x:auto;}
+.cliente{font-weight:600;}
+.muted{color:var(--muted);}
+
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+.badge.incluso{background:#E7ECFA;color:var(--dh-azul);}
+.badge.extra{background:var(--warn-bg);color:var(--warn);}
+.badge.ok{background:var(--ok-bg);color:var(--ok);}
+.badge.pend{background:var(--warn-bg);color:var(--warn);}
+
+.formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px;}
+.formrow label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:5px;}
+.formrow input,.formrow select{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;}
+
+.toast{position:fixed;bottom:20px;left:calc(var(--side) + 20px);background:var(--ink);color:#fff;padding:12px 18px;
+  border-radius:8px;font-size:13px;box-shadow:var(--sh2);display:none;z-index:60;}
+.toast.show{display:block;}
+
+.example-note{font-size:11.5px;color:var(--muted);font-style:italic;margin:-6px 0 16px;}
+
+.seg{display:inline-flex;background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:3px;margin-bottom:16px;}
+.seg button{background:transparent;border:0;padding:8px 16px;font-size:11.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.4px;color:var(--muted);border-radius:6px;}
+.seg button.on{background:var(--card);color:var(--dh-azul);box-shadow:var(--sh);}
+.seg-view{display:none;}
+.seg-view.on{display:block;}
+.badge.late{background:#FBE7E7;color:#C13C3C;}
+.adv-card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px 20px;margin-bottom:14px;}
+.adv-card .hd{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.adv-card .hd b{font-size:14.5px;}
+.adv-card .hd .cnt{font-size:12px;color:var(--muted);}
+.adv-card .hd .cnt b{font-size:12px;}
+.adv-card .hd .cnt .n-late{color:#C13C3C;font-weight:700;}
+.adv-card .hd .cnt .n-pend{color:var(--warn);font-weight:700;}
+
+/* responsivo: sidebar vira topo em telas estreitas */
+@media (max-width:760px){
+  .shell{padding-left:0;}
+  .side{position:static;width:100%;height:auto;}
+  .side-logo{height:60px;}
+  nav{flex-direction:row;overflow-x:auto;padding:0 8px 8px;}
+  nav a{white-space:nowrap;padding:10px 14px;border-left:none;border-bottom:4px solid transparent;}
+  nav a.active{border-left:none;border-bottom-color:var(--dh-ciano);}
+  .topbar{position:static;}
+  main{padding:18px 16px 50px;}
+  .toast{left:16px;right:16px;}
+}
+
+/* seletor de cliente com busca (autocomplete) */
+.cp{position:relative;}
+.cp::after{content:'';position:absolute;right:13px;top:50%;width:8px;height:8px;border:1.6px solid var(--muted);
+  border-width:0 1.6px 1.6px 0;transform:translateY(-65%) rotate(45deg);pointer-events:none;}
+.cp-list{position:absolute;left:0;right:0;top:calc(100% + 4px);background:var(--card);border:1.5px solid var(--line);
+  border-radius:6px;box-shadow:var(--sh2);max-height:190px;overflow-y:auto;z-index:25;display:none;}
+.cp.open .cp-list{display:block;}
+.cp-list div{padding:9px 13px;font-size:13px;cursor:pointer;}
+.cp-list div:hover{background:var(--bg);}
+.cp-list .cp-empty{color:var(--muted);font-style:italic;cursor:default;}
+.cp-list .cp-empty:hover{background:transparent;}
+
+/* donut chart (css puro, pra relatórios) */
+.donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-bottom:6px;}
+.donut{width:128px;height:128px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;position:relative;}
+.donut::before{content:'';position:absolute;inset:16px;border-radius:50%;background:var(--card);}
+.donut b{position:relative;font-size:18px;color:var(--ink);text-align:center;line-height:1.2;}
+.donut b small{display:block;font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:1px;}
+.leg{display:flex;flex-direction:column;gap:9px;font-size:12.5px;}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle;}
+
+/* Relatório Anual — pré-visualização editável */
+.edit-badge{display:inline-flex;align-items:center;gap:6px;background:var(--dh-ciano-cl);color:#0B2E36;font-size:10.5px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:5px 11px;border-radius:99px;flex:none;}
+[contenteditable="true"]{border-radius:4px;transition:background .1s;cursor:text;}
+[contenteditable="true"]:hover{background:rgba(35,185,214,.10);}
+[contenteditable="true"]:focus{outline:2px solid var(--dh-ciano);background:#fff;}
+.ra-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+.ra-sec{margin-bottom:26px;}
+.ra-sec:last-child{margin-bottom:0;}
+.ra-sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dh-azul);margin:0 0 14px;
+  font-weight:800;padding-bottom:8px;border-bottom:1.5px solid var(--line);}
+.ra-narr{font-size:13.5px;line-height:1.65;}
+.ra-src{font-size:11.5px;color:var(--muted);font-style:italic;margin-top:8px;}
+tfoot td{font-weight:700;border-top:1.5px solid var(--line);}
+
+/* tela de login (mesma do CRM) */
+.lg-gate{display:none;position:fixed;inset:0;z-index:1000;background:var(--dh-marinho);
+  background-image:linear-gradient(120deg,rgba(54,75,155,.55) 0%,rgba(20,29,63,0) 60%);
+  align-items:center;justify-content:center;padding:24px 16px;overflow-y:auto;}
+.lg-gate.on{display:flex;}
+.lg-wrap{width:100%;max-width:430px;}
+.lg-box{background:#fff;color:var(--ink);padding:44px 40px 36px;position:relative;text-align:left;border-radius:8px;border-top:4px solid var(--dh-ciano);box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.lg-logo{height:58px;margin-bottom:26px;display:block;background:var(--dh-marinho);padding:10px 14px;border-radius:6px;box-sizing:content-box;}
+.lg-box h1{font-size:28px;line-height:1.15;margin:0 0 10px;font-weight:700;letter-spacing:-.3px;}
+.lg-box h1 strong{color:var(--dh-azul);display:block;}
+.lg-msg{font-size:14px;line-height:1.6;color:var(--muted);margin:0 0 24px;min-height:22px;}
+.lg-btn{display:inline-flex;align-items:center;gap:12px;background:var(--dh-azul);color:#fff;border:0;border-radius:4px;padding:13px 20px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;transition:.2s;}
+.lg-btn svg{background:#fff;padding:3px;border-radius:2px;box-sizing:content-box;}
+.lg-btn:hover{background:#2B3D82;}
+.lg-err{color:#B4441A;font-size:12.5px;margin:14px 0 0;}
+.lg-switch{display:none;margin-top:18px;color:var(--dh-azul);font-size:12px;text-decoration:underline;}
+.lg-gate.denied .lg-switch{display:inline-block;}
+.lg-foot{color:#8F9AC0;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-top:26px;text-align:center;}
+.lg-row{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;align-items:stretch;width:100%;max-width:900px;}
+.lg-row .lg-wrap{width:auto;flex:1 1 380px;max-width:420px;display:flex;}
+.lg-row .lg-wrap .lg-box{width:100%;box-sizing:border-box;}
+.lg-btn-disabled{background:#9aa0ae!important;cursor:not-allowed!important;}
+.lg-btn-disabled:hover{background:#9aa0ae!important;}
+
+/* ---------- aviso "salvando" ---------- */
+.sync-toast{position:fixed;right:18px;bottom:18px;z-index:900;background:var(--dh-marinho);color:#fff;font-size:12px;font-weight:600;padding:10px 16px;border-radius:4px;border-left:4px solid var(--dh-ciano);opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;}
+.sync-toast.on{opacity:1;transform:none;}
+.sync-toast.ok{border-left-color:#2f8f5b;}
+.sync-toast.err{border-left-color:var(--dh-laranja);}
+.dh-cfg-grp{font-size:11px;letter-spacing:1.8px;text-transform:uppercase;font-weight:700;color:var(--dh-azul);padding:22px 2px 8px;}
+#finHead{margin:0 0 20px;}
+
+body.lg-open{overflow:hidden;}
+.topbar{top:0;}
+.topbar .who a{color:#fff;text-decoration:underline;margin-left:10px;cursor:pointer;}
+#loading{padding:60px 28px;color:var(--muted);font-size:14px;}
+.side-back{display:none;margin:14px 18px 0;padding:10px 12px;border:1px solid rgba(255,255,255,.18);border-radius:6px;color:#C7CEE4;font-size:11px;text-transform:uppercase;letter-spacing:1px;text-align:center;}
+.side-back:hover{color:#fff;border-color:var(--dh-ciano);}
+.formrow textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;min-height:40px;resize:vertical;}
+.formrow .wide{grid-column:1/-1;}
+.acts{white-space:nowrap;text-align:right;}
+.lnk{background:none;border:0;color:var(--dh-azul);font-size:12px;font-weight:700;padding:4px 6px;text-decoration:underline;}
+.lnk.red{color:#C13C3C;}
+.btn.sm{padding:7px 11px;font-size:11px;}
+.btn.ok{background:var(--ok);} .btn.ok:hover{background:#277a4d;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:16px 22px 4px;}
+.toolbar input,.toolbar select{padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;}
+.toolbar input{flex:1;min-width:180px;}
+.empty{padding:22px;color:var(--muted);font-size:13px;text-align:center;}
+.badge.cancel{background:#EEF0F4;color:var(--muted);}
+.badge.info{background:#E3F6FA;color:#0B6B80;}
+.editing{outline:2px solid var(--dh-ciano);}
+.money{white-space:nowrap;}
+.adv-mail{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);}
+.adv-mail input{padding:6px 9px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;width:210px;font-family:inherit;}
+.ra-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.toast.err{background:#9B2C2C;}
+td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;font-family:inherit;}
+</style>
+</head>
+<body class="lg-open">
+
+<div class="lg-gate on" id="loginGate">
+  <div class="lg-wrap">
+    <div class="lg-box">
+      <img class="lg-logo" src="logo-dh.png" alt="DH LAW">
+      <h1>CRM <strong>Controladoria</strong></h1>
+      <p class="lg-msg" id="lgMsg">Conectando à sua conta Google...</p>
+      <button class="lg-btn" id="lgBtn" type="button" style="display:none"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> Entrar com Google</button>
+      <p class="lg-err" id="lgErr"></p>
+      <a href="#" class="lg-switch" id="lgSwitch">Usar outra conta</a>
+    </div>
+    <p class="lg-foot">Domingues &amp; Herold Advogados · uso interno</p>
+  </div>
+</div>
+<div class="sync-toast" id="syncToast"></div>
+
+<div class="shell">
+  <aside class="side">
+    <div class="side-logo"><img src="logo-dh.png" alt="Domingues &amp; Herold"></div>
+    <div class="side-tag">Controladoria</div>
+    <nav id="nav"></nav>
+    <a class="side-back" id="sideBack" href="index.html">← CRM Financeiro</a>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <b id="tbTela">Painel da Controladoria</b>
+      <span class="who"><span id="who"></span><span id="whoPerfil"></span><a id="btnSair">Sair</a></span>
+    </header>
+
+    <div id="loading">Carregando...</div>
+    <main id="app" style="display:none">
+
+      <!-- PAINEL -->
+      <section class="view on" id="v-painel">
+        <h1>Painel da Controladoria</h1>
+        <p class="sub">Visão geral do mês, sem valores financeiros: só situação e quantidades.</p>
+        <div class="stats" id="pnStats"></div>
+        <div class="card"><h2><span class="t">Horas excedentes aguardando sua validação</span><button class="btn ghost sm" onclick="goTab('horas')">Ir para Consultivo e horas</button></h2><div class="tbl-wrap" id="pnExced"></div></div>
+        <div class="card"><h2><span class="t">Pendências de reconciliação</span></h2><p class="example-note" style="margin-top:-8px">Avisos automáticos quando algo não fecha com o Financeiro (ex.: cliente sem valor de hora extra, custa já recebida).</p><div class="tbl-wrap" id="pnPend"></div></div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section class="view" id="v-clientes">
+        <h1>Clientes</h1>
+        <p class="sub">Cadastro único, vindo do Financeiro. Aqui é só consulta: valores e dados bancários do cliente não aparecem.</p>
+        <div class="search"><input id="clBusca" placeholder="Buscar cliente por nome…" oninput="renderClientes()"><select id="clStatus" onchange="renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="ativos">Ativos</option><option value="todos">Todos</option></select></div>
+        <div class="card" style="padding:0"><div class="tbl-wrap" id="clTabela"></div></div>
+      </section>
+
+      <!-- PROCESSOS -->
+      <section class="view" id="v-processos">
+        <h1>Processos</h1>
+        <p class="sub">Processos de cada cliente, com valor da causa, condenação/acordo, valores recebidos e saving.</p>
+        <div class="card" id="prCard">
+          <h2><span class="t" id="prTitulo">Novo processo</span></h2>
+          <input type="hidden" id="pr_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="pr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Nº do processo (CNJ)</label><input id="pr_NumeroCNJ" placeholder="0000000-00.0000.0.00.0000"></div>
+            <div><label>Partes</label><input id="pr_Partes" placeholder="Reclamante x Reclamada"></div>
+            <div><label>Vara</label><input id="pr_Vara" placeholder="2ª Vara do Trabalho de…"></div>
+            <div><label>Área jurídica</label><input id="pr_AreaJuridica" list="dlAreas" placeholder="Trabalhista, Cível…"></div>
+            <div><label>Advogado responsável</label><select id="pr_AdvogadoResponsavel"></select></div>
+          </div>
+          <div class="formrow">
+            <div><label>Valor da causa (R$)</label><input id="pr_ValorCausa" placeholder="0,00"></div>
+            <div><label>Condenação / acordo (R$)</label><input id="pr_CondenacaoAcordo" placeholder="0,00"></div>
+            <div><label>Valores recebidos (R$)</label><input id="pr_ValoresRecebidos" placeholder="0,00"></div>
+            <div><label>Saving (R$)</label><input id="pr_Saving" placeholder="automático se vazio"></div>
+            <div><label>Classificação</label><select id="pr_Classificacao"><option value="Incluso">Incluso no contrato</option><option value="Extra">Extra</option></select></div>
+            <div><label>Situação</label><select id="pr_Situacao"><option>Ativo</option><option>Arquivado</option></select></div>
+          </div>
+          <div class="formrow">
+            <div><label>Data de início</label><input type="date" id="pr_DataInicio"></div>
+            <div><label>Data de encerramento</label><input type="date" id="pr_DataEncerramento"></div>
+            <div class="wide" style="grid-column:span 2"><label>Situação atualizada (andamento)</label><input id="pr_SituacaoAtualizada" placeholder="Aguardando sentença…"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="prBtn" onclick="salvarProcesso()">+ Registrar processo</button><button class="btn ghost" id="prCancel" style="display:none" onclick="limparProcesso()">Cancelar edição</button></div>
+          <datalist id="dlAreas"><option>Trabalhista</option><option>Cível</option><option>Tributário</option><option>Empresarial</option><option>Consumidor</option><option>Previdenciário</option></datalist>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="toolbar"><input id="prBusca" placeholder="Buscar por cliente, número ou partes…" oninput="renderProcessos()"><select id="prFiltro" onchange="renderProcessos()"><option value="Ativo">Ativos</option><option value="Arquivado">Arquivados</option><option value="">Todos</option></select></div>
+          <div class="tbl-wrap" id="prTabela"></div>
+        </div>
+      </section>
+
+      <!-- CUSTAS -->
+      <section class="view" id="v-custas">
+        <h1>Custas e audiências</h1>
+        <p class="sub">Lançamento direto: ao salvar, o valor já entra no Contas a Receber do cliente.</p>
+        <div class="card" id="cuCard">
+          <h2><span class="t" id="cuTitulo">Novo lançamento</span></h2>
+          <input type="hidden" id="cu_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="cu_Cliente" autocomplete="off" placeholder="Buscar cliente…" onblur="setTimeout(fillCuProc,200)"><div class="cp-list"></div></div></div>
+            <div><label>Processo relacionado</label><select id="cu_ProcessoID"><option value="">(nenhum)</option></select></div>
+            <div><label>Categoria</label><select id="cu_Categoria"></select></div>
+            <div><label>Data</label><input type="date" id="cu_Data"></div>
+            <div><label>Valor (R$)</label><input id="cu_Valor" placeholder="0,00"></div>
+            <div><label>Cobrar do cliente?</label><select id="cu_Cobravel"><option value="Sim">Sim, vai para o Receber</option><option value="Não">Não (despesa interna)</option></select></div>
+          </div>
+          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição</label><input id="cu_Descricao" placeholder="Guia de preparo do recurso, audiência de conciliação…"></div><div class="wide" style="grid-column:span 2"><label>Link do comprovante (opcional)</label><input id="cu_DocumentoLink" placeholder="https://drive.google.com/…"></div></div>
+          <div class="btn-row"><button class="btn" id="cuBtn" onclick="salvarCusta()">+ Lançar</button><button class="btn ghost" id="cuCancel" style="display:none" onclick="limparCusta()">Cancelar edição</button></div>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="toolbar"><input id="cuBusca" placeholder="Buscar por cliente ou descrição…" oninput="renderCustas()"><input type="month" id="cuMes" onchange="renderCustas()" style="flex:none"></div>
+          <div class="tbl-wrap" id="cuTabela"></div>
+        </div>
+      </section>
+
+      <!-- CONSULTIVO E HORAS -->
+      <section class="view" id="v-horas">
+        <h1>Consultivo e horas</h1>
+        <p class="sub">Lance as atividades quando quiser, sem esperar o fim do mês. Quando um cliente passa das horas contratadas, ele aparece abaixo para você validar a cobrança.</p>
+        <div class="card" id="hrCard">
+          <h2><span class="t" id="hrTitulo">Registrar atividade</span></h2>
+          <input type="hidden" id="hr_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="hr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Data</label><input type="date" id="hr_Data"></div>
+            <div><label>Advogado</label><select id="hr_Responsavel"></select></div>
+            <div><label>Tempo gasto</label><input id="hr_Duracao" placeholder="1:30"></div>
+            <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="hr_Tarefa" placeholder="Revisão de contrato de locação"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="hrBtn" onclick="salvarHoras()">+ Registrar</button><button class="btn ghost" id="hrCancel" style="display:none" onclick="limparHoras()">Cancelar edição</button></div>
+        </div>
+        <div class="card">
+          <h2><span class="t">Horas do mês por cliente</span><span class="btn-row"><input type="month" id="hrMes" onchange="carregarResumo()" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit"></span></h2>
+          <p class="example-note" style="margin-top:-8px">Excedente = consultivo acima das horas contratadas. "Validar" lança a cobrança no Contas a Receber (o valor é calculado pelo Financeiro a partir do contrato). "Não cobrar" registra a decisão, com o motivo.</p>
+          <div class="tbl-wrap" id="hrResumo"></div>
+        </div>
+        <div class="card" style="padding:0">
+          <div class="toolbar"><b style="font-size:14px">Lançamentos do mês</b><input id="hrBusca" placeholder="Filtrar por cliente ou tarefa…" oninput="renderHoras()"></div>
+          <div class="tbl-wrap" id="hrTabela"></div>
+        </div>
+      </section>
+
+      <!-- RELATÓRIO ANUAL -->
+      <section class="view" id="v-relatorio">
+        <h1>Relatório Anual</h1>
+        <p class="sub">Relatório por cliente e período. Tudo na pré-visualização pode ser ajustado à mão antes de exportar para PowerPoint.</p>
+        <div class="card">
+          <h2><span class="t">Gerar relatório</span></h2>
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="ra_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>De</label><input type="month" id="ra_De"></div>
+            <div><label>Até</label><input type="month" id="ra_Ate"></div>
+          </div>
+          <button class="btn" onclick="gerarRelatorio()">📊 Gerar relatório</button>
+        </div>
+        <div id="raPrev"></div>
+      </section>
+
+      <!-- FÉRIAS -->
+      <section class="view" id="v-ferias">
+        <h1>Férias</h1>
+        <p class="sub">Só consulta, para organizar audiências e prazos sabendo quem estará fora.</p>
+        <div class="card" style="padding:0"><div class="tbl-wrap" id="feTabela"></div></div>
+      </section>
+
+      <!-- USUÁRIOS (só Admin) -->
+      <section class="view" id="v-usuarios">
+        <h1>Usuários e perfis</h1>
+        <p class="sub">Quem entra no CRM e com qual perfil. Controladoria nunca vê o financeiro. Os e-mails fixos do sistema são sempre Admin.</p>
+        <div class="card">
+          <h2><span class="t">Cadastrar / alterar acesso</span></h2>
+          <div class="formrow">
+            <div><label>E-mail Google</label><input id="us_Email" placeholder="controladoria@advogadosdh.com.br"></div>
+            <div><label>Nome</label><input id="us_Nome"></div>
+            <div><label>Perfil</label><select id="us_Perfil"><option>Controladoria</option><option>Financeiro</option><option>Admin</option></select></div>
+            <div><label>Ativo</label><select id="us_Ativo"><option>Sim</option><option>Não</option></select></div>
+          </div>
+          <button class="btn" onclick="salvarUsuario()">Salvar acesso</button>
+        </div>
+        <div class="card" style="padding:0"><div class="tbl-wrap" id="usTabela"></div></div>
+      </section>
+
+    </main>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="controladoria-tela.js?v=CTRL1"></script>
+</body>
+</html>
