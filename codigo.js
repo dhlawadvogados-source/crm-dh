@@ -1977,19 +1977,16 @@ function buildRelatorioClienteHtml_(d){
      "<td style='width:120px;text-align:right;vertical-align:middle'><img src='"+LOGO_B64+"' style='height:58px'></td></tr></table></div>";
   h+="<div style='padding:6px 40px 10px'>";
   // números do mês
-  var pct = d.contratadas>0 ? Math.round(d.consDec/d.contratadas*100) : 0;
+
   h+=titulo("O mês em números","Resumo");
   h+="<table data-nobreak='1' style='width:100%;border-collapse:separate;margin:0 -5px'><tr>"+
      kpi("Horas contratadas", d.contratadas>0?hm(d.contratadas):"—", AZUL, "por mês")+
-     kpi("Consultivo utilizado", hm(d.consDec), CIANO, d.contratadas>0?pct+"% do pacote":(d.tarefas.length+" tarefa(s)"))+
+     kpi("Consultivo utilizado", hm(d.consDec), CIANO, d.tarefas.length+" atividade(s) no mês")+
      kpi("Processual", hm(d.procDec), CIANO, "horas registradas")+
      kpi("Horas excedentes", d.excHoras>0?hm(d.excHoras):"0h00", d.excHoras>0?"#D4561C":"#2F8F5B", d.excHoras>0?"acima do contratado":"dentro do pacote")+
      "</tr></table>";
-  if(d.contratadas>0){
-    var w=Math.min(100,pct), wx=pct>100?Math.min(100,pct-100):0;
-    h+="<div style='margin:14px 0 0'><div style='height:10px;background:#EEF1FA;border-radius:6px;overflow:hidden'><div style='height:10px;width:"+w+"%;background:"+(pct>100?"#D4561C":CIANO)+"'></div></div>"+
-       "<div style='font-size:10.5px;color:"+MUT+";margin-top:5px'>"+(pct>100?"O consultivo passou o pacote em <b style='color:#D4561C'>"+hm(d.excHoras)+"</b> ("+hm(d.consDec)+" de "+hm(d.contratadas)+" contratadas).":"Foram usadas "+hm(d.consDec)+" das "+hm(d.contratadas)+" contratadas no mês.")+"</div></div>";
-  }
+  // sem barra nem percentual do pacote: só destaca quando passou do contratado
+  if(d.excHoras>0) h+="<div style='margin:12px 0 0;font-size:11px;color:"+MUT+"'>O consultivo passou o pacote em <b style='color:#D4561C'>"+hm(d.excHoras)+"</b> ("+hm(d.consDec)+" utilizadas de "+hm(d.contratadas)+" contratadas).</div>";
   // contrato
   h+="<div data-nobreak='1'>"+titulo("Seu contrato","Condições");
   h+="<table style='width:100%;border-collapse:collapse;font-size:11.5px'>";
