@@ -10,8 +10,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="dh-login.css?v=CTRL4">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=CTRL4"></script>
-<script src="gas-shim.js?v=CTRL4"></script>
+<script src="config.js?v=CTRL6"></script>
+<script src="gas-shim.js?v=CTRL6"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Layout: sidebar fixo (igual ao CRM real) + topbar + área de conteúdo com telas que trocam por clique no menu.
@@ -106,8 +106,8 @@ tr:last-child td{border-bottom:0;}
 .badge.pend{background:var(--warn-bg);color:var(--warn);}
 
 .formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px;}
-.formrow label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:5px;}
-.formrow input,.formrow select{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;}
+.formrow label,.fgrid label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:5px;}
+.formrow input,.formrow select,.fgrid input,.fgrid select{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;}
 
 .toast{position:fixed;bottom:20px;left:calc(var(--side) + 20px);background:var(--ink);color:#fff;padding:12px 18px;
   border-radius:8px;font-size:13px;box-shadow:var(--sh2);display:none;z-index:60;}
@@ -284,8 +284,23 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
 .cp-list div[data-n]{display:flex;align-items:center;justify-content:space-between;gap:10px;}
 .cp-nome{white-space:nowrap;}
 .cp-tag{display:inline-block;flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 8px;border-radius:99px;background:#E7ECFA;color:var(--dh-azul);white-space:nowrap;}
-.cp-sel{position:absolute;right:34px;max-width:48%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;top:50%;transform:translateY(-50%);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--dh-azul);background:#E7ECFA;border-radius:99px;padding:2px 8px;pointer-events:none;}
+.cp-sel{display:inline-block;margin-top:5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--dh-azul);background:#E7ECFA;border-radius:99px;padding:2px 8px;pointer-events:none;}
 .cp-sel:empty{display:none;}
+.mes-lbl{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);flex:none;}
+.mes-lbl input{padding:9px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px;}
+.pasta-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.pasta-top .mes-lbl{margin-left:auto;}
+.pasta-res{margin:0 0 12px;padding:10px 12px;border-radius:8px;background:var(--ok-bg);font-size:12.5px;line-height:1.55;}
+.pasta-res.warn{background:#FBE7E7;}
+.pasta-res ul{margin:6px 0 0;padding-left:18px;}
+.badge.aparte{background:#EEF0F4;color:#59607A;}
+.fsec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dh-azul);font-weight:800;margin:6px 0 10px;padding-bottom:6px;border-bottom:1.5px solid var(--line);}
+.fgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;margin-bottom:16px;}
+.fgrid > div{min-width:0;}
+.fgrid .s2{grid-column:span 2;} .fgrid .s4{grid-column:1/-1;}
+.fgrid input,.fgrid select{box-sizing:border-box;}
+.fgrid small{display:block;margin-top:5px;font-size:11.5px;line-height:1.4;}
+@media(max-width:760px){.fgrid{grid-template-columns:1fr 1fr;} .fgrid .s2{grid-column:1/-1;}}
 </style>
 </head>
 <body class="lg-open">
@@ -313,6 +328,58 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
     </div>
   </div>
 </div>
+<div class="mbg" id="md_cu" onclick="if(event.target===this)fecharModal('md_cu')"><div class="mdl" id="cuCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_cu')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="cuTitulo">Novo lançamento</span></h2>
+          <input type="hidden" id="cu_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="cu_Cliente" autocomplete="off" placeholder="Buscar cliente…" onblur="setTimeout(fillCuProc,200)"><div class="cp-list"></div></div></div>
+            <div><label>Processo relacionado</label><select id="cu_ProcessoID"><option value="">(nenhum)</option></select></div>
+            <div><label>Categoria</label><select id="cu_Categoria"></select></div>
+            <div><label>Data</label><input type="date" id="cu_Data"></div>
+            <div><label>Valor (R$)</label><input id="cu_Valor" placeholder="0,00"></div>
+            <div><label>Cobrar do cliente?</label><select id="cu_Cobravel"><option value="Sim">Sim, cobrar do cliente</option><option value="Não">Não (despesa interna)</option></select></div>
+          </div>
+          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição</label><input id="cu_Descricao" placeholder="Guia de preparo do recurso, audiência de conciliação…"></div><div class="wide" style="grid-column:span 2"><label>Link do comprovante (opcional)</label><input id="cu_DocumentoLink" placeholder="https://drive.google.com/…"></div></div>
+          <div class="btn-row"><button class="btn" id="cuBtn" onclick="salvarCusta()">+ Lançar</button><button class="btn ghost" id="cuCancel" style="display:none" onclick="limparCusta()">Cancelar edição</button></div>
+        </div></div>
+<div class="mbg" id="md_hr" onclick="if(event.target===this)fecharModal('md_hr')"><div class="mdl" id="hrCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_hr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="hrTitulo">Incluir / ajustar tarefa</span></h2>
+          <input type="hidden" id="hr_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="hr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Data</label><input type="date" id="hr_Data"></div>
+            <div><label>Advogado</label><select id="hr_Responsavel"></select></div>
+            <div><label>Tempo gasto</label><input id="hr_Duracao" placeholder="1:30"></div>
+            <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="hr_Tarefa" placeholder="Revisão de contrato de locação"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="hrBtn" onclick="salvarHoras()">+ Incluir tarefa</button><button class="btn ghost" id="hrCancel" style="display:none" onclick="limparHoras()">Cancelar edição</button></div>
+        </div></div>
+<div class="mbg" id="md_tp" onclick="if(event.target===this)fecharModal('md_tp')"><div class="mdl" id="tpCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_tp')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="tpTitulo">Incluir / ajustar tarefa</span></h2>
+          <input type="hidden" id="tp_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="tp_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Data</label><input type="date" id="tp_Data"></div>
+            <div><label>Advogado</label><select id="tp_Responsavel"></select></div>
+            <div><label>Tempo gasto</label><input id="tp_Duracao" placeholder="1:30"></div>
+            <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="tp_Tarefa" placeholder="Revisão de contrato de locação"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="tpBtn" onclick="salvarTarefaProc()">+ Incluir tarefa</button><button class="btn ghost" id="tpCancel" style="display:none" onclick="limparTarefaProc()">Cancelar edição</button></div>
+        </div></div>
+<div class="mbg" id="md_ex" onclick="if(event.target===this)fecharModal('md_ex')"><div class="mdl" id="exCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_ex')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="exTitulo">Extras do cliente no mês</span></h2>
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="ex_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Horas processuais (hh:mm)</label><input id="ex_HorasProcessual" placeholder="05:30"></div>
+            <div><label>Audiências realizadas (qtd)</label><input id="ex_Audiencias" placeholder="0"></div>
+            <div><label>Excesso de processos (qtd)</label><input id="ex_ExcessoProcessos" placeholder="0"><small id="exProcAuto" class="muted" style="display:none;margin-top:4px">Este cliente já tem pasta de processos: o excesso é calculado sozinho e este número não é usado.</small></div>
+            <div><label>Reembolso de custas (R$)</label><input id="ex_Custas" placeholder="0,00"></div>
+          </div>
+          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição das audiências</label><input id="ex_DescricaoAudiencias" placeholder="30/09/2026 - 14:10 - 1VT ... Audiência UNA"></div><div class="wide" style="grid-column:span 2"><label>Descrição das custas</label><input id="ex_DescricaoCustas" placeholder="Correio: notificação extrajudicial"></div></div>
+          <div class="btn-row"><button class="btn" onclick="salvarExtras()">Salvar extras</button><button class="btn ghost" onclick="limparExtras()">Limpar</button></div>
+          <p class="example-note" style="margin:10px 0 0">Custas e audiências lançadas na tela "Custas e audiências" entram sozinhas. Aqui vai só o que não foi lançado lá (ou o que veio da planilha), para não contar duas vezes.</p>
+        </div></div>
+<input type="file" id="arqTarefas" accept=".xlsx,.xls,.csv" style="display:none" onchange="importarTarefas(this)">
 <div class="sync-toast" id="syncToast"></div>
 
 <div class="shell">
@@ -337,7 +404,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
         <h1>Painel da Controladoria</h1>
         <p class="sub">Visão geral do mês, sem valores financeiros: só situação e quantidades.</p>
         <div class="stats" id="pnStats"></div>
-        <div class="card"><h2><span class="t">Horas excedentes aguardando sua validação</span><button class="btn ghost sm" onclick="goTab('horas')">Ir para Consultivo e horas</button></h2><div class="tbl-wrap" id="pnExced"></div></div>
+        <div class="card"><h2><span class="t">Clientes acima das horas contratadas</span><button class="btn ghost sm" onclick="goTab('consultivo')">Ir para Consultivo</button></h2><div class="tbl-wrap" id="pnExced"></div></div>
         <div class="card"><h2><span class="t">Pendências de reconciliação</span></h2><p class="example-note" style="margin-top:-8px">Avisos automáticos quando algo não fecha com o Financeiro (ex.: cliente sem valor de hora extra, custa já recebida).</p><div class="tbl-wrap" id="pnPend"></div></div>
       </section>
 
@@ -379,107 +446,49 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
         <div class="mbg" id="md_pr" onclick="if(event.target===this)fecharModal('md_pr')"><div class="mdl" id="prCard">
           <h2><button class="mx" type="button" onclick="fecharModal('md_pr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="prTitulo">Novo processo</span></h2>
           <input type="hidden" id="pr_ID">
-          <div class="formrow">
-            <div><label>Cliente</label><div class="cp"><input id="pr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
-            <div><label>Nº do processo (CNJ)</label><input id="pr_NumeroCNJ" placeholder="0000000-00.0000.0.00.0000"></div>
-            <div><label>Partes</label><input id="pr_Partes" placeholder="Reclamante x Reclamada"></div>
-            <div><label>Vara</label><input id="pr_Vara" placeholder="2ª Vara do Trabalho de…"></div>
+          <div class="fsec">Cliente e cobrança</div>
+          <div class="fgrid">
+            <div class="s2"><label>Cliente</label><div class="cp"><input id="pr_Cliente" autocomplete="off" placeholder="Buscar cliente…" onblur="setTimeout(fillPrContrato,200)"><div class="cp-list"></div></div></div>
+            <div class="s2"><label>Classificação (cobrança)</label><select id="pr_Contrato"></select><small class="muted" id="prContratoInfo"></small></div>
+          </div>
+          <div class="fsec">Processo</div>
+          <div class="fgrid">
+            <div class="s2"><label>Nº do processo (CNJ)</label><input id="pr_NumeroCNJ" placeholder="0000000-00.0000.0.00.0000"></div>
             <div><label>Área jurídica</label><input id="pr_AreaJuridica" list="dlAreas" placeholder="Trabalhista, Cível…"></div>
             <div><label>Advogado responsável</label><select id="pr_AdvogadoResponsavel"></select></div>
+            <div class="s4"><label>Partes</label><input id="pr_Partes" placeholder="Reclamante x Reclamada"></div>
+            <div class="s4"><label>Vara</label><input id="pr_Vara" placeholder="2ª Vara do Trabalho de…"></div>
           </div>
-          <div class="formrow">
+          <div class="fsec">Valores</div>
+          <div class="fgrid">
             <div><label>Valor da causa (R$)</label><input id="pr_ValorCausa" placeholder="0,00"></div>
             <div><label>Condenação / acordo (R$)</label><input id="pr_CondenacaoAcordo" placeholder="0,00"></div>
             <div><label>Valores recebidos (R$)</label><input id="pr_ValoresRecebidos" placeholder="0,00"></div>
             <div><label>Saving (R$)</label><input id="pr_Saving" placeholder="automático se vazio"></div>
-            <div><label>Situação</label><select id="pr_Situacao"><option>Ativo</option><option>Arquivado</option></select></div>
           </div>
-          <div class="formrow">
+          <div class="fsec">Andamento</div>
+          <div class="fgrid">
+            <div><label>Situação</label><select id="pr_Situacao"><option>Ativo</option><option>Arquivado</option></select></div>
             <div><label>Data de início</label><input type="date" id="pr_DataInicio"></div>
             <div><label>Data de encerramento</label><input type="date" id="pr_DataEncerramento"></div>
-            <div class="wide" style="grid-column:span 2"><label>Situação atualizada (andamento)</label><input id="pr_SituacaoAtualizada" placeholder="Aguardando sentença…"></div>
+            <div class="s4"><label>Situação atualizada (andamento)</label><input id="pr_SituacaoAtualizada" placeholder="Aguardando sentença…"></div>
           </div>
           <div class="btn-row"><button class="btn" id="prBtn" onclick="salvarProcesso()">+ Registrar processo</button><button class="btn ghost" id="prCancel" style="display:none" onclick="limparProcesso()">Cancelar edição</button></div>
           <datalist id="dlAreas"><option>Trabalhista</option><option>Cível</option><option>Tributário</option><option>Empresarial</option><option>Consumidor</option><option>Previdenciário</option></datalist>
         </div></div>
         <div class="card" style="padding:0">
-          <div class="toolbar"><input id="prBusca" placeholder="Buscar cliente, número do processo ou partes…" oninput="PG.pr=1;renderProcessos()"><select id="prFiltro" onchange="PG.pr=1;renderProcessos()"><option value="">Todas as pastas</option><option value="exc">Acima do contrato</option><option value="com">Com processos</option></select><button class="btn" data-ico="mais" onclick="novoProcesso()">Novo processo</button></div>
+          <div class="toolbar"><input id="prBusca" placeholder="Buscar cliente, número do processo ou partes…" oninput="PG.pr=1;renderProcessos()"><select id="prFiltro" onchange="PG.pr=1;renderProcessos()"><option value="">Todas as pastas</option><option value="exc">Acima do contrato</option><option value="com">Com processos</option><option value="parte">Com processos extras (à parte)</option></select><label class="mes-lbl">Mês <input type="month" id="prMes" onchange="mudarComp(this.value)"></label><button class="btn" data-ico="mais" onclick="novoProcesso()">Novo processo</button></div>
           <div class="tbl-wrap" id="prTabela"></div>
         </div>
       </section>
 
-      <!-- CUSTAS -->
-      <section class="view" id="v-custas">
-        <h1>Custas e audiências</h1>
-        <p class="sub">Lance no dia a dia. Entram no Contas a Receber do <b>mês seguinte</b> quando você sincronizar no Fechamento do mês.</p>
-        <div class="mbg" id="md_cu" onclick="if(event.target===this)fecharModal('md_cu')"><div class="mdl" id="cuCard">
-          <h2><button class="mx" type="button" onclick="fecharModal('md_cu')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="cuTitulo">Novo lançamento</span></h2>
-          <input type="hidden" id="cu_ID">
-          <div class="formrow">
-            <div><label>Cliente</label><div class="cp"><input id="cu_Cliente" autocomplete="off" placeholder="Buscar cliente…" onblur="setTimeout(fillCuProc,200)"><div class="cp-list"></div></div></div>
-            <div><label>Processo relacionado</label><select id="cu_ProcessoID"><option value="">(nenhum)</option></select></div>
-            <div><label>Categoria</label><select id="cu_Categoria"></select></div>
-            <div><label>Data</label><input type="date" id="cu_Data"></div>
-            <div><label>Valor (R$)</label><input id="cu_Valor" placeholder="0,00"></div>
-            <div><label>Cobrar do cliente?</label><select id="cu_Cobravel"><option value="Sim">Sim, cobrar do cliente</option><option value="Não">Não (despesa interna)</option></select></div>
-          </div>
-          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição</label><input id="cu_Descricao" placeholder="Guia de preparo do recurso, audiência de conciliação…"></div><div class="wide" style="grid-column:span 2"><label>Link do comprovante (opcional)</label><input id="cu_DocumentoLink" placeholder="https://drive.google.com/…"></div></div>
-          <div class="btn-row"><button class="btn" id="cuBtn" onclick="salvarCusta()">+ Lançar</button><button class="btn ghost" id="cuCancel" style="display:none" onclick="limparCusta()">Cancelar edição</button></div>
-        </div></div>
+      <!-- CONSULTIVO -->
+      <section class="view" id="v-consultivo">
+        <h1>Consultivo</h1>
+        <p class="sub">Uma pasta por cliente e por mês. Importe a planilha de tarefas do cliente (Tarefa | Data | Tempo | Advogado): o sistema soma as horas, compara com o contrato e o excedente entra sozinho no Contas a Receber do mês seguinte.</p>
         <div class="card" style="padding:0">
-          <div class="toolbar"><input id="cuBusca" placeholder="Buscar por cliente ou descrição…" oninput="PG.cu=1;renderCustas()"><input type="month" id="cuMes" onchange="PG.cu=1;renderCustas()" style="flex:none"><button class="btn" data-ico="mais" onclick="novaCusta()">Nova custa/audiência</button></div>
-          <div class="tbl-wrap" id="cuTabela"></div>
-        </div>
-      </section>
-
-      <!-- FECHAMENTO DO MÊS -->
-      <section class="view" id="v-horas">
-        <h1>Fechamento do mês</h1>
-        <p class="sub">Tudo o que for feito no mês (horas, custas, audiências, processos) é cobrado no mês seguinte. Suba a planilha quantas vezes quiser e sincronize com o Financeiro quando quiser: nada é duplicado.</p>
-        <div class="card" id="fcTopo">
-          <h2><span class="t">Competência</span>
-            <span class="btn-row"><input type="month" id="hrMes" onchange="carregarResumo()" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit"></span></h2>
-          <div id="fcStatus" class="fc-status"></div>
-          <div class="btn-row" style="margin-top:14px">
-            <button class="btn sync" id="fcSync" data-ico="sync" onclick="sincronizar()">Sincronizar com o Financeiro</button>
-            <label class="btn ghost" data-ico="upload" style="cursor:pointer">Subir planilha (semana ou mês)<input type="file" id="fcArquivo" accept=".xlsx,.xls" style="display:none" onchange="subirPlanilha(this)"></label>
-          </div>
-          <p class="example-note" style="margin:12px 0 0">A planilha é a mesma do fechamento de hoje (abas <b>CONSULTIVO</b> e <b>PROCESSUAL E EXTRAS</b>). As tarefas do período do arquivo substituem as que já estavam nesse período; os extras de cada cliente do arquivo substituem os anteriores.</p>
-          <div id="fcResultado"></div>
-        </div>
-        <div class="card">
-          <h2><span class="t" id="fcTituloTabela">Clientes no mês</span><span class="btn-row"><input id="fcBusca" placeholder="Buscar cliente…" oninput="PG.fc=1;renderResumo()" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px"><button class="btn ghost sm" data-ico="mais" onclick="novoExtras()">Extras de um cliente</button></span></h2>
-          <p class="example-note" style="margin-top:-8px">Excedente = consultivo acima das horas contratadas. O valor de cada cobrança é calculado pelo Financeiro a partir do contrato.</p>
-          <div class="tbl-wrap" id="hrResumo"></div>
-        </div>
-        <div class="mbg" id="md_ex" onclick="if(event.target===this)fecharModal('md_ex')"><div class="mdl" id="exCard">
-          <h2><button class="mx" type="button" onclick="fecharModal('md_ex')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="exTitulo">Extras do cliente no mês</span></h2>
-          <div class="formrow">
-            <div><label>Cliente</label><div class="cp"><input id="ex_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
-            <div><label>Horas processuais (hh:mm)</label><input id="ex_HorasProcessual" placeholder="05:30"></div>
-            <div><label>Audiências realizadas (qtd)</label><input id="ex_Audiencias" placeholder="0"></div>
-            <div><label>Excesso de processos (qtd)</label><input id="ex_ExcessoProcessos" placeholder="0"><small id="exProcAuto" class="muted" style="display:none;margin-top:4px">Este cliente já tem pasta de processos: o excesso é calculado sozinho e este número não é usado.</small></div>
-            <div><label>Reembolso de custas (R$)</label><input id="ex_Custas" placeholder="0,00"></div>
-          </div>
-          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição das audiências</label><input id="ex_DescricaoAudiencias" placeholder="30/09/2026 - 14:10 - 1VT ... Audiência UNA"></div><div class="wide" style="grid-column:span 2"><label>Descrição das custas</label><input id="ex_DescricaoCustas" placeholder="Correio: notificação extrajudicial"></div></div>
-          <div class="btn-row"><button class="btn" onclick="salvarExtras()">Salvar extras</button><button class="btn ghost" onclick="limparExtras()">Limpar</button></div>
-          <p class="example-note" style="margin:10px 0 0">Custas e audiências lançadas na tela "Custas e audiências" entram sozinhas. Aqui vai só o que não foi lançado lá (ou o que veio da planilha), para não contar duas vezes.</p>
-        </div></div>
-        <div class="mbg" id="md_hr" onclick="if(event.target===this)fecharModal('md_hr')"><div class="mdl" id="hrCard">
-          <h2><button class="mx" type="button" onclick="fecharModal('md_hr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="hrTitulo">Incluir / ajustar tarefa</span></h2>
-          <input type="hidden" id="hr_ID">
-          <div class="formrow">
-            <div><label>Cliente</label><div class="cp"><input id="hr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
-            <div><label>Data</label><input type="date" id="hr_Data"></div>
-            <div><label>Advogado</label><select id="hr_Responsavel"></select></div>
-            <div><label>Tempo gasto</label><input id="hr_Duracao" placeholder="1:30"></div>
-            <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="hr_Tarefa" placeholder="Revisão de contrato de locação"></div>
-          </div>
-          <div class="btn-row"><button class="btn" id="hrBtn" onclick="salvarHoras()">+ Incluir tarefa</button><button class="btn ghost" id="hrCancel" style="display:none" onclick="limparHoras()">Cancelar edição</button></div>
-        </div></div>
-        <div class="card" style="padding:0">
-          <div class="toolbar"><b style="font-size:14px">Tarefas da competência</b><input id="hrBusca" placeholder="Filtrar por cliente, tarefa ou advogado…" oninput="PG.hr=1;renderHoras()"><button class="btn ghost sm" data-ico="mais" onclick="novaTarefa()">Incluir tarefa</button></div>
-          <div class="tbl-wrap" id="hrTabela"></div>
+          <div class="toolbar"><label class="mes-lbl">Mês trabalhado <input type="month" id="hrMes" onchange="mudarComp(this.value)"></label><input id="coBusca" placeholder="Buscar cliente…" oninput="PG.co=1;renderConsultivo()"><select id="coFiltro" onchange="PG.co=1;renderConsultivo()"><option value="">Todas as pastas</option><option value="exc">Acima do contrato</option><option value="sem">Sem lançamento no mês</option></select></div>
+          <div class="tbl-wrap" id="coTabela"></div>
         </div>
       </section>
 
@@ -556,6 +565,6 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
 <div class="mbg" id="md_ver" onclick="if(event.target===this)fecharModal('md_ver')"><div class="mdl"><h2><button class="mx" type="button" onclick="fecharModal('md_ver')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="verTitulo"></span></h2><div id="verCorpo"></div></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="controladoria-tela.js?v=CTRL4"></script>
+<script src="controladoria-tela.js?v=CTRL6"></script>
 </body>
 </html>
