@@ -872,10 +872,10 @@
     function show(mode) {
       ensure();
       if (!gate) return;
-      gate.className = 'lg-gate on ' + (mode || '');
+      gate.className = 'lg-gate' + (/\blx\b/.test(gate.className || '') ? ' lx' : '') + ' on ' + (mode || '');
       document.body.classList.add('lg-open');
     }
-    function hide() { ensure(); if (gate) { gate.className = 'lg-gate'; document.body.classList.remove('lg-open'); } }
+    function hide() { ensure(); if (gate) { gate.className = 'lg-gate' + (/\blx\b/.test(gate.className || '') ? ' lx' : ''); document.body.classList.remove('lg-open'); } }
     return {
       init: init,
       askLogin: function (expired) {

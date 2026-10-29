@@ -7,9 +7,11 @@
 <link rel="icon" type="image/png" href="logo-dh.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dh-login.css?v=CTRL3">
 <script src="https://accounts.google.com/gsi/client" async defer></script>
-<script src="config.js?v=CTRL2"></script>
-<script src="gas-shim.js?v=CTRL2"></script>
+<script src="config.js?v=CTRL3"></script>
+<script src="gas-shim.js?v=CTRL3"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
 /* Layout: sidebar fixo (igual ao CRM real) + topbar + área de conteúdo com telas que trocam por clique no menu.
@@ -240,22 +242,53 @@ body.lg-open{overflow:hidden;}
 .fc-status .big{font-size:15px;font-weight:700;color:var(--dh-marinho);}
 .fc-res{margin-top:14px;padding:12px 14px;border-radius:8px;background:var(--bg);font-size:12.5px;line-height:1.6;}
 .fc-res.warn{background:var(--warn-bg);}
+.mbg{display:none;position:fixed;inset:0;background:rgba(20,29,63,.45);z-index:80;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto;}
+.mbg.on{display:flex;}
+.mdl{background:var(--card);border-radius:10px;width:100%;max-width:900px;padding:22px 24px;box-shadow:0 20px 60px rgba(20,29,63,.35);}
+.mdl h2{display:flex;align-items:center;gap:10px;font-size:16px;margin:0 0 16px;}
+.mdl .mx{order:2;margin-left:auto;background:none;border:0;font-size:18px;color:var(--muted);padding:2px 6px;}
+.mdl .mx:hover{color:var(--ink);}
+.mdl.editing{outline:none;}
+.pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);}
+.pager button{background:var(--card);border:1.5px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;color:var(--dh-azul);}
+.pager button:disabled{opacity:.4;cursor:default;}
+.ficha{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 18px;font-size:13px;margin-bottom:16px;}
+.ficha div span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px;}
+.ficha-sec{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dh-azul);font-weight:800;margin:16px 0 8px;padding-bottom:6px;border-bottom:1.5px solid var(--line);}
+.search .btn{flex:none;}
+.ico{vertical-align:-3px;flex:none;}
+.btn{display:inline-flex;align-items:center;gap:6px;}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:30px;height:28px;margin-left:4px;background:var(--card);border:1.5px solid var(--line);border-radius:6px;color:var(--dh-azul);padding:0;}
+.ib:hover{background:#EEF1FA;border-color:var(--dh-azul);}
+.ib.red{color:#C13C3C;}
+.ib.red:hover{background:#FBE7E7;border-color:#C13C3C;}
+.edit-badge .ico{vertical-align:-2px;}
 td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;font-family:inherit;}
 </style>
 </head>
 <body class="lg-open">
 
-<div class="lg-gate on" id="loginGate">
-  <div class="lg-wrap">
-    <div class="lg-box">
-      <img class="lg-logo" src="logo-dh.png" alt="DH LAW">
-      <h1>CRM <strong>Controladoria</strong></h1>
+<div class="lg-gate lx on" id="loginGate">
+  <div class="lx-art">
+    <svg class="lx-waves" viewBox="0 0 1100 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M-50,430 L-20,437 L10,444 L40,450 L70,455 L100,458 L130,460 L160,460 L190,459 L220,455 L250,449 L280,441 L310,431 L340,420 L370,406 L400,392 L430,376 L460,359 L490,342 L520,325 L550,308 L580,292 L610,277 L640,263 L670,251 L700,240 L730,232 L760,225 L790,221 L820,218 L850,218 L880,219 L910,222 L940,227 L970,232 L1000,239 L1030,246 L1060,253 L1090,260 L1120,266 L1150,271" opacity="0.05"/><path d="M-50,459 L-20,467 L10,473 L40,479 L70,483 L100,485 L130,485 L160,484 L190,480 L220,474 L250,466 L280,456 L310,443 L340,430 L370,414 L400,398 L430,380 L460,363 L490,345 L520,328 L550,311 L580,295 L610,281 L640,268 L670,257 L700,249 L730,242 L760,238 L790,235 L820,235 L850,237 L880,241 L910,246 L940,252 L970,259 L1000,267 L1030,275 L1060,282 L1090,289 L1120,295 L1150,300" opacity="0.08"/><path d="M-50,489 L-20,497 L10,503 L40,507 L70,510 L100,510 L130,509 L160,505 L190,499 L220,490 L250,480 L280,467 L310,453 L340,437 L370,420 L400,402 L430,383 L460,365 L490,347 L520,330 L550,313 L580,299 L610,286 L640,275 L670,266 L700,259 L730,255 L760,253 L790,253 L820,255 L850,259 L880,265 L910,272 L940,280 L970,288 L1000,297 L1030,305 L1060,312 L1090,319 L1120,324 L1150,327" opacity="0.10"/><path d="M-50,520 L-20,527 L10,531 L40,534 L70,535 L100,534 L130,530 L160,524 L190,515 L220,504 L250,491 L280,476 L310,459 L340,442 L370,423 L400,404 L430,385 L460,366 L490,348 L520,331 L550,316 L580,303 L610,292 L640,283 L670,276 L700,272 L730,270 L760,271 L790,274 L820,278 L850,284 L880,292 L910,301 L940,310 L970,319 L1000,328 L1030,336 L1060,343 L1090,348 L1120,352 L1150,353" opacity="0.12"/><path d="M-50,551 L-20,556 L10,559 L40,560 L70,559 L100,555 L130,549 L160,540 L190,528 L220,515 L250,499 L280,482 L310,463 L340,444 L370,424 L400,404 L430,385 L460,367 L490,349 L520,334 L550,320 L580,309 L610,300 L640,293 L670,289 L700,288 L730,289 L760,292 L790,297 L820,304 L850,312 L880,321 L910,331 L940,341 L970,350 L1000,359 L1030,367 L1060,372 L1090,376 L1120,378 L1150,378" opacity="0.15"/><path d="M-50,580 L-20,584 L10,585 L40,584 L70,580 L100,573 L130,564 L160,552 L190,538 L220,522 L250,504 L280,485 L310,465 L340,445 L370,424 L400,404 L430,385 L460,367 L490,351 L520,337 L550,326 L580,317 L610,310 L640,306 L670,305 L700,306 L730,310 L760,316 L790,323 L820,332 L850,342 L880,353 L910,363 L940,373 L970,382 L1000,390 L1030,397 L1060,401 L1090,403 L1120,403 L1150,400" opacity="0.17"/><path d="M-50,609 L-20,610 L10,609 L40,605 L70,598 L100,589 L130,576 L160,562 L190,545 L220,527 L250,507 L280,486 L310,465 L340,444 L370,423 L400,403 L430,385 L460,369 L490,355 L520,343 L550,333 L580,327 L610,323 L640,322 L670,324 L700,328 L730,335 L760,343 L790,352 L820,363 L850,374 L880,385 L910,396 L940,406 L970,414 L1000,421 L1030,426 L1060,428 L1090,428 L1120,425 L1150,419" opacity="0.20"/><path d="M-50,635 L-20,634 L10,630 L40,623 L70,613 L100,600 L130,585 L160,568 L190,549 L220,528 L250,507 L280,485 L310,463 L340,442 L370,422 L400,403 L430,386 L460,372 L490,360 L520,350 L550,344 L580,341 L610,340 L640,342 L670,347 L700,354 L730,362 L760,373 L790,384 L820,396 L850,408 L880,419 L910,430 L940,439 L970,446 L1000,451 L1030,453 L1060,453 L1090,450 L1120,444 L1150,435" opacity="0.05"/><path d="M-50,659 L-20,655 L10,648 L40,637 L70,624 L100,609 L130,591 L160,571 L190,550 L220,528 L250,505 L280,483 L310,461 L340,440 L370,421 L400,404 L430,389 L460,377 L490,367 L520,361 L550,358 L580,357 L610,360 L640,365 L670,373 L700,382 L730,393 L760,405 L790,417 L820,430 L850,442 L880,453 L910,463 L940,470 L970,476 L1000,478 L1030,478 L1060,475 L1090,469 L1120,460 L1150,448" opacity="0.08"/><path d="M-50,680 L-20,672 L10,662 L40,648 L70,632 L100,614 L130,593 L160,572 L190,549 L220,525 L250,502 L280,480 L310,458 L340,439 L370,421 L400,406 L430,394 L460,384 L490,378 L520,375 L550,375 L580,378 L610,384 L640,392 L670,402 L700,413 L730,426 L760,439 L790,452 L820,465 L850,477 L880,487 L910,495 L940,500 L970,503 L1000,503 L1030,500 L1060,494 L1090,484 L1120,472 L1150,457" opacity="0.10"/><path d="M-50,697 L-20,686 L10,672 L40,656 L70,637 L100,616 L130,593 L160,569 L190,546 L220,522 L250,499 L280,477 L310,456 L340,439 L370,423 L400,411 L430,401 L460,395 L490,392 L520,392 L550,396 L580,402 L610,411 L640,421 L670,434 L700,447 L730,461 L760,475 L790,488 L820,500 L850,511 L880,519 L910,525 L940,528 L970,528 L1000,525 L1030,518 L1060,509 L1090,496 L1120,480 L1150,462" opacity="0.12"/><path d="M-50,711 L-20,696 L10,679 L40,659 L70,638 L100,614 L130,590 L160,566 L190,541 L220,517 L250,495 L280,474 L310,456 L340,440 L370,428 L400,418 L430,412 L460,409 L490,410 L520,414 L550,421 L580,430 L610,441 L640,454 L670,468 L700,483 L730,497 L760,511 L790,524 L820,535 L850,544 L880,550 L910,553 L940,553 L970,550 L1000,543 L1030,533 L1060,520 L1090,504 L1120,485 L1150,464" opacity="0.15"/><path d="M-50,720 L-20,702 L10,682 L40,660 L70,636 L100,611 L130,585 L160,560 L190,536 L220,513 L250,492 L280,473 L310,457 L340,444 L370,435 L400,429 L430,427 L460,428 L490,432 L520,439 L550,449 L580,461 L610,475 L640,489 L670,505 L700,520 L730,535 L760,548 L790,559 L820,569 L850,575 L880,578 L910,578 L940,575 L970,568 L1000,558 L1030,544 L1060,527 L1090,508 L1120,486 L1150,463" opacity="0.17"/><path d="M-50,726 L-20,705 L10,682 L40,657 L70,631 L100,605 L130,580 L160,555 L190,531 L220,510 L250,490 L280,474 L310,461 L340,452 L370,446 L400,444 L430,445 L460,450 L490,458 L520,468 L550,481 L580,495 L610,511 L640,527 L670,543 L700,558 L730,572 L760,584 L790,593 L820,600 L850,603 L880,603 L910,600 L940,593 L970,582 L1000,568 L1030,551 L1060,531 L1090,508 L1120,484 L1150,459" opacity="0.20"/></svg>
+    <div class="lx-brand">
+      <img class="lx-logo" src="dh-logo.svg" alt="DH LAW">
+      <div class="lx-name">Domingues &amp; Herold Advogados</div>
+      <div class="lx-rule"></div>
+      <div class="lx-tag">Estamos comprometidos<br>com a <b>sua causa</b>.</div>
+    </div>
+    <div class="lx-copy">© DH LAW · Sistema interno</div>
+  </div>
+  <div class="lx-side">
+    <div class="lx-card">
+      <span class="lx-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Área restrita</span>
+      <h1>Acesso ao CRM<span>Controladoria</span></h1>
       <p class="lg-msg" id="lgMsg">Conectando à sua conta Google...</p>
-      <button class="lg-btn" id="lgBtn" type="button" style="display:none"><svg width="18" height="18" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> Entrar com Google</button>
+      <button class="lg-btn" id="lgBtn" type="button" style="display:none"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> Entrar com Google <span class="lx-arr">→</span></button>
       <p class="lg-err" id="lgErr"></p>
       <a href="#" class="lg-switch" id="lgSwitch">Usar outra conta</a>
+      <div class="lx-foot"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg> Acesso seguro pela sua conta Google</div>
     </div>
-    <p class="lg-foot">Domingues &amp; Herold Advogados · uso interno</p>
   </div>
 </div>
 <div class="sync-toast" id="syncToast"></div>
@@ -289,17 +322,39 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
       <!-- CLIENTES -->
       <section class="view" id="v-clientes">
         <h1>Clientes</h1>
-        <p class="sub">Cadastro único, vindo do Financeiro. Aqui é só consulta: valores e dados bancários do cliente não aparecem.</p>
-        <div class="search"><input id="clBusca" placeholder="Buscar cliente por nome…" oninput="renderClientes()"><select id="clStatus" onchange="renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="ativos">Ativos</option><option value="todos">Todos</option></select></div>
+        <p class="sub">Cadastro único, o mesmo do Financeiro. Valores e dados bancários do cliente ficam só no Financeiro.</p>
+        <div class="search"><input id="clBusca" placeholder="Buscar cliente por nome…" oninput="PG.cli=1;renderClientes()"><select id="clStatus" onchange="PG.cli=1;renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="ativos">Ativos</option><option value="todos">Todos</option></select><button class="btn" data-ico="mais" onclick="novoCliente()">Novo cliente</button></div>
         <div class="card" style="padding:0"><div class="tbl-wrap" id="clTabela"></div></div>
+        <div class="mbg" id="md_cl" onclick="if(event.target===this)fecharModal('md_cl')"><div class="mdl" id="clCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_cl')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="clTitulo">Novo cliente</span></h2>
+          <input type="hidden" id="cl_ID">
+          <div class="formrow">
+            <div class="wide" style="grid-column:span 2"><label>Nome (igual ao contrato)</label><input id="cl_Nome" placeholder="Razão social ou nome"></div>
+            <div><label>Modalidade</label><input id="cl_Tipo" list="dlTipos" placeholder="Assessoria mensal, Pontual, DET…"></div>
+            <div><label>Situação</label><input id="cl_Status" list="dlStatus" placeholder="Ativo"></div>
+          </div>
+          <div class="formrow">
+            <div><label>Horas contratadas/mês</label><input id="cl_HorasContratadas" placeholder="10:00"></div>
+            <div><label>Processos contratados</label><input id="cl_ProcessosContratados" placeholder="0"></div>
+            <div><label>Responsável</label><input id="cl_Responsavel" list="dlResp" placeholder="advogado(a)"></div>
+            <div><label>Subtipo</label><input id="cl_Subtipo" placeholder="opcional"></div>
+          </div>
+          <div class="formrow">
+            <div><label>Início do contrato</label><input type="date" id="cl_DataInicio"></div>
+            <div><label>Fim do contrato</label><input type="date" id="cl_DataFim"></div>
+          </div>
+          <p class="example-note" style="margin:0 0 12px">Mensalidade, valor da hora extra, valores de audiência/processo e dados de pagamento são preenchidos pelo Financeiro (ele recebe um aviso).</p>
+          <div class="btn-row"><button class="btn" id="clBtn" onclick="salvarCliente()">Cadastrar cliente</button><button class="btn ghost" onclick="fecharModal('md_cl')">Cancelar</button></div>
+          <datalist id="dlTipos"></datalist><datalist id="dlStatus"></datalist><datalist id="dlResp"></datalist>
+        </div></div>
       </section>
 
       <!-- PROCESSOS -->
       <section class="view" id="v-processos">
         <h1>Processos</h1>
         <p class="sub">Processos de cada cliente, com valor da causa, condenação/acordo, valores recebidos e saving.</p>
-        <div class="card" id="prCard">
-          <h2><span class="t" id="prTitulo">Novo processo</span></h2>
+        <div class="mbg" id="md_pr" onclick="if(event.target===this)fecharModal('md_pr')"><div class="mdl" id="prCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_pr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="prTitulo">Novo processo</span></h2>
           <input type="hidden" id="pr_ID">
           <div class="formrow">
             <div><label>Cliente</label><div class="cp"><input id="pr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
@@ -324,9 +379,9 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
           </div>
           <div class="btn-row"><button class="btn" id="prBtn" onclick="salvarProcesso()">+ Registrar processo</button><button class="btn ghost" id="prCancel" style="display:none" onclick="limparProcesso()">Cancelar edição</button></div>
           <datalist id="dlAreas"><option>Trabalhista</option><option>Cível</option><option>Tributário</option><option>Empresarial</option><option>Consumidor</option><option>Previdenciário</option></datalist>
-        </div>
+        </div></div>
         <div class="card" style="padding:0">
-          <div class="toolbar"><input id="prBusca" placeholder="Buscar por cliente, número ou partes…" oninput="renderProcessos()"><select id="prFiltro" onchange="renderProcessos()"><option value="Ativo">Ativos</option><option value="Arquivado">Arquivados</option><option value="">Todos</option></select></div>
+          <div class="toolbar"><input id="prBusca" placeholder="Buscar por cliente, número ou partes…" oninput="PG.pr=1;renderProcessos()"><select id="prFiltro" onchange="PG.pr=1;renderProcessos()"><option value="Ativo">Ativos</option><option value="Arquivado">Arquivados</option><option value="">Todos</option></select><button class="btn" data-ico="mais" onclick="novoProcesso()">Novo processo</button></div>
           <div class="tbl-wrap" id="prTabela"></div>
         </div>
       </section>
@@ -335,8 +390,8 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
       <section class="view" id="v-custas">
         <h1>Custas e audiências</h1>
         <p class="sub">Lance no dia a dia. Entram no Contas a Receber do <b>mês seguinte</b> quando você sincronizar no Fechamento do mês.</p>
-        <div class="card" id="cuCard">
-          <h2><span class="t" id="cuTitulo">Novo lançamento</span></h2>
+        <div class="mbg" id="md_cu" onclick="if(event.target===this)fecharModal('md_cu')"><div class="mdl" id="cuCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_cu')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="cuTitulo">Novo lançamento</span></h2>
           <input type="hidden" id="cu_ID">
           <div class="formrow">
             <div><label>Cliente</label><div class="cp"><input id="cu_Cliente" autocomplete="off" placeholder="Buscar cliente…" onblur="setTimeout(fillCuProc,200)"><div class="cp-list"></div></div></div>
@@ -348,9 +403,9 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
           </div>
           <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição</label><input id="cu_Descricao" placeholder="Guia de preparo do recurso, audiência de conciliação…"></div><div class="wide" style="grid-column:span 2"><label>Link do comprovante (opcional)</label><input id="cu_DocumentoLink" placeholder="https://drive.google.com/…"></div></div>
           <div class="btn-row"><button class="btn" id="cuBtn" onclick="salvarCusta()">+ Lançar</button><button class="btn ghost" id="cuCancel" style="display:none" onclick="limparCusta()">Cancelar edição</button></div>
-        </div>
+        </div></div>
         <div class="card" style="padding:0">
-          <div class="toolbar"><input id="cuBusca" placeholder="Buscar por cliente ou descrição…" oninput="renderCustas()"><input type="month" id="cuMes" onchange="renderCustas()" style="flex:none"></div>
+          <div class="toolbar"><input id="cuBusca" placeholder="Buscar por cliente ou descrição…" oninput="PG.cu=1;renderCustas()"><input type="month" id="cuMes" onchange="PG.cu=1;renderCustas()" style="flex:none"><button class="btn" data-ico="mais" onclick="novaCusta()">Nova custa/audiência</button></div>
           <div class="tbl-wrap" id="cuTabela"></div>
         </div>
       </section>
@@ -364,19 +419,19 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
             <span class="btn-row"><input type="month" id="hrMes" onchange="carregarResumo()" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit"></span></h2>
           <div id="fcStatus" class="fc-status"></div>
           <div class="btn-row" style="margin-top:14px">
-            <button class="btn sync" id="fcSync" onclick="sincronizar()">🔄 Sincronizar com o Financeiro</button>
-            <label class="btn ghost" style="cursor:pointer">📥 Subir planilha (semana ou mês)<input type="file" id="fcArquivo" accept=".xlsx,.xls" style="display:none" onchange="subirPlanilha(this)"></label>
+            <button class="btn sync" id="fcSync" data-ico="sync" onclick="sincronizar()">Sincronizar com o Financeiro</button>
+            <label class="btn ghost" data-ico="upload" style="cursor:pointer">Subir planilha (semana ou mês)<input type="file" id="fcArquivo" accept=".xlsx,.xls" style="display:none" onchange="subirPlanilha(this)"></label>
           </div>
           <p class="example-note" style="margin:12px 0 0">A planilha é a mesma do fechamento de hoje (abas <b>CONSULTIVO</b> e <b>PROCESSUAL E EXTRAS</b>). As tarefas do período do arquivo substituem as que já estavam nesse período; os extras de cada cliente do arquivo substituem os anteriores.</p>
           <div id="fcResultado"></div>
         </div>
         <div class="card">
-          <h2><span class="t" id="fcTituloTabela">Clientes no mês</span></h2>
+          <h2><span class="t" id="fcTituloTabela">Clientes no mês</span><span class="btn-row"><input id="fcBusca" placeholder="Buscar cliente…" oninput="PG.fc=1;renderResumo()" style="padding:8px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px"><button class="btn ghost sm" data-ico="mais" onclick="novoExtras()">Extras de um cliente</button></span></h2>
           <p class="example-note" style="margin-top:-8px">Excedente = consultivo acima das horas contratadas. O valor de cada cobrança é calculado pelo Financeiro a partir do contrato.</p>
           <div class="tbl-wrap" id="hrResumo"></div>
         </div>
-        <div class="card" id="exCard">
-          <h2><span class="t" id="exTitulo">Extras do cliente no mês</span></h2>
+        <div class="mbg" id="md_ex" onclick="if(event.target===this)fecharModal('md_ex')"><div class="mdl" id="exCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_ex')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="exTitulo">Extras do cliente no mês</span></h2>
           <div class="formrow">
             <div><label>Cliente</label><div class="cp"><input id="ex_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
             <div><label>Horas processuais (hh:mm)</label><input id="ex_HorasProcessual" placeholder="05:30"></div>
@@ -387,9 +442,9 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
           <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição das audiências</label><input id="ex_DescricaoAudiencias" placeholder="30/09/2026 - 14:10 - 1VT ... Audiência UNA"></div><div class="wide" style="grid-column:span 2"><label>Descrição das custas</label><input id="ex_DescricaoCustas" placeholder="Correio: notificação extrajudicial"></div></div>
           <div class="btn-row"><button class="btn" onclick="salvarExtras()">Salvar extras</button><button class="btn ghost" onclick="limparExtras()">Limpar</button></div>
           <p class="example-note" style="margin:10px 0 0">Custas e audiências lançadas na tela "Custas e audiências" entram sozinhas. Aqui vai só o que não foi lançado lá (ou o que veio da planilha), para não contar duas vezes.</p>
-        </div>
-        <div class="card" id="hrCard">
-          <h2><span class="t" id="hrTitulo">Incluir / ajustar tarefa</span></h2>
+        </div></div>
+        <div class="mbg" id="md_hr" onclick="if(event.target===this)fecharModal('md_hr')"><div class="mdl" id="hrCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_hr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="hrTitulo">Incluir / ajustar tarefa</span></h2>
           <input type="hidden" id="hr_ID">
           <div class="formrow">
             <div><label>Cliente</label><div class="cp"><input id="hr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
@@ -399,9 +454,9 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
             <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="hr_Tarefa" placeholder="Revisão de contrato de locação"></div>
           </div>
           <div class="btn-row"><button class="btn" id="hrBtn" onclick="salvarHoras()">+ Incluir tarefa</button><button class="btn ghost" id="hrCancel" style="display:none" onclick="limparHoras()">Cancelar edição</button></div>
-        </div>
+        </div></div>
         <div class="card" style="padding:0">
-          <div class="toolbar"><b style="font-size:14px">Tarefas da competência</b><input id="hrBusca" placeholder="Filtrar por cliente, tarefa ou advogado…" oninput="renderHoras()"></div>
+          <div class="toolbar"><b style="font-size:14px">Tarefas da competência</b><input id="hrBusca" placeholder="Filtrar por cliente, tarefa ou advogado…" oninput="PG.hr=1;renderHoras()"><button class="btn ghost sm" data-ico="mais" onclick="novaTarefa()">Incluir tarefa</button></div>
           <div class="tbl-wrap" id="hrTabela"></div>
         </div>
       </section>
@@ -417,7 +472,7 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
             <div><label>De</label><input type="month" id="ra_De"></div>
             <div><label>Até</label><input type="month" id="ra_Ate"></div>
           </div>
-          <button class="btn" onclick="gerarRelatorio()">📊 Gerar relatório</button>
+          <button class="btn" data-ico="grafico" onclick="gerarRelatorio()">Gerar relatório</button>
         </div>
         <div id="raPrev"></div>
       </section>
@@ -425,8 +480,34 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
       <!-- FÉRIAS -->
       <section class="view" id="v-ferias">
         <h1>Férias</h1>
-        <p class="sub">Só consulta, para organizar audiências e prazos sabendo quem estará fora.</p>
-        <div class="card" style="padding:0"><div class="tbl-wrap" id="feTabela"></div></div>
+        <p class="sub">Programação e histórico de férias da equipe: as mesmas informações do CRM Financeiro (o que um altera, o outro vê).</p>
+        <datalist id="dlColab"></datalist>
+        <div class="mbg" id="md_fe" onclick="if(event.target===this)fecharModal('md_fe')"><div class="mdl" id="feCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_fe')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="feTitulo">Programação de férias</span></h2>
+          <input type="hidden" id="fe_ID">
+          <div class="formrow">
+            <div><label>Colaborador</label><input id="fe_Nome" list="dlColab" placeholder="nome"></div>
+            <div><label>Vencimento das férias</label><input type="date" id="fe_Vencimento"></div>
+            <div><label>Saldo (dias)</label><input id="fe_Saldo" type="number" step="1" placeholder="ex.: 30"></div>
+            <div><label>Situação</label><select id="fe_Status"></select></div>
+            <div class="wide" style="grid-column:span 2"><label>Observações</label><input id="fe_Obs" placeholder="ex.: fracionar em 2 períodos, aviso enviado…"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="feBtn" onclick="salvarFerias()">+ Adicionar</button><button class="btn ghost" id="feCancel" style="display:none" onclick="limparFerias()">Cancelar edição</button></div>
+        </div></div>
+        <div class="search" style="margin-bottom:12px"><input id="feBusca" placeholder="Buscar pessoa…" oninput="PG.fe=1;PG.fh=1;renderFerias()"><button class="btn" data-ico="mais" onclick="novaFerias()">Programar férias</button><button class="btn ghost" data-ico="mais" onclick="novoHistorico()">Registrar férias tiradas</button></div>
+        <div class="card" style="padding:0"><div style="padding:16px 22px 4px"><b style="font-size:14px">Programação de férias</b></div><div class="tbl-wrap" id="feTabela"></div></div>
+        <div class="mbg" id="md_fh" onclick="if(event.target===this)fecharModal('md_fh')"><div class="mdl" id="fhCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_fh')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="fhTitulo">Registrar férias tiradas</span></h2>
+          <input type="hidden" id="fh_ID">
+          <div class="formrow">
+            <div><label>Pessoa</label><input id="fh_Nome" list="dlColab" placeholder="nome"></div>
+            <div><label>Início</label><input type="date" id="fh_Inicio"></div>
+            <div><label>Fim</label><input type="date" id="fh_Fim"></div>
+            <div class="wide" style="grid-column:span 2"><label>Observações</label><input id="fh_Obs" placeholder="ex.: 1º período, 15 dias…"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="fhBtn" onclick="salvarHistorico()">+ Adicionar ao histórico</button><button class="btn ghost" id="fhCancel" style="display:none" onclick="limparHistorico()">Cancelar edição</button></div>
+        </div></div>
+        <div class="card" style="padding:0"><div class="tbl-wrap" id="fhTabela"></div></div>
       </section>
 
       <!-- USUÁRIOS (só Admin) -->
@@ -449,8 +530,9 @@ td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;f
     </main>
   </div>
 </div>
+<div class="mbg" id="md_ver" onclick="if(event.target===this)fecharModal('md_ver')"><div class="mdl"><h2><button class="mx" type="button" onclick="fecharModal('md_ver')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="verTitulo"></span></h2><div id="verCorpo"></div></div></div>
 <div class="toast" id="toast"></div>
 
-<script src="controladoria-tela.js?v=CTRL2"></script>
+<script src="controladoria-tela.js?v=CTRL3"></script>
 </body>
 </html>
