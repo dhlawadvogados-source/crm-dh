@@ -317,7 +317,7 @@ function seletorMes(id) { return '<label class="mes-lbl">Mês <input type="month
 function travadoNoMes(nome) { var r = RESUMO && RESUMO.competencia === compSel() ? RESUMO.clientes.filter(function (c) { return norm(c.cliente) === norm(nome); })[0] : null; return !!(r && r.travado); }
 function notaIntegracao(nome) {
   var comp = compSel();
-  return travadoNoMes(nome) ? '<p class="pasta-nota"><b>' + esc(mesNome(comp)) + ' já foi cobrado/recebido pelo Financeiro:</b> este mês está travado e não dá para alterar.</p>'
+  return travadoNoMes(nome) ? '<p class="pasta-nota"><b>' + esc(mesNome(comp)) + ' já foi cobrado pelo Financeiro.</b> Pode lançar normalmente: fica no histórico e no relatório anual, mas o Contas a Receber desse mês não é alterado.</p>'
     : '<p class="pasta-nota">Tudo o que for lançado aqui entra sozinho no Contas a Receber de <b>' + esc(mesNome(proxMes(comp))) + '</b> (sem duplicar). O valor de horas e processos é calculado pelo Financeiro conforme o contrato.</p>';
 }
 function renderPasta() {
@@ -335,15 +335,15 @@ function renderPasta() {
     '<button class="' + (PASTA_ABA === 'custas' ? 'on' : '') + '" onclick="abaPasta(\'custas\')">Custas e audiências (' + cus.length + ')</button></div>' + seletorMes() + '</div>';
   if (PASTA_ABA === 'horas') {
     h += notaIntegracao(f.nome) + blocoImport('pr|' + f.nome + '|' + comp) +
-      '<div class="btn-row pasta-bar">' + (trav ? '' : '<button class="btn sm" onclick="escolherArquivo(\'pr\')">' + ic('upload') + ' Importar planilha</button><button class="btn sm ghost" onclick="baixarModelo(\'pr\')">Baixar modelo</button><button class="btn sm ghost" onclick="novaTarefaProc()">' + ic('mais') + ' Nova tarefa</button>') + '</div>' +
+      '<div class="btn-row pasta-bar">' + ('<button class="btn sm" onclick="escolherArquivo(\'pr\')">' + ic('upload') + ' Importar planilha</button><button class="btn sm ghost" onclick="baixarModelo(\'pr\')">Baixar modelo</button><button class="btn sm ghost" onclick="novaTarefaProc()">' + ic('mais') + ' Nova tarefa</button>') + '</div>' +
       tabelaTarefas(tps, 'pt', 'Proc', trav, 'Nenhuma hora processual em ' + mesNome(comp) + '.');
   } else if (PASTA_ABA === 'custas') {
     var Pc = paginar('pcu', cus.slice().sort(function (a, b) { return String(b.Data).localeCompare(a.Data); }));
-    h += notaIntegracao(f.nome) + '<div class="btn-row pasta-bar">' + (trav ? '' : '<button class="btn sm" onclick="novaCustaPasta()">' + ic('mais') + ' Nova custa / audiência</button>') + '</div>' +
+    h += notaIntegracao(f.nome) + '<div class="btn-row pasta-bar">' + ('<button class="btn sm" onclick="novaCustaPasta()">' + ic('mais') + ' Nova custa / audiência</button>') + '</div>' +
       (cus.length ? '<div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Descrição</th><th>Categoria</th><th>Valor</th><th></th></tr></thead><tbody>' +
         Pc.itens.map(function (c) { var id = esc(c.ID);
           return '<tr><td>' + fmtD(c.Data) + '</td><td>' + esc(c.Descricao) + (contratos.length > 1 && contratoPorId(c.ClienteID) ? '<br><span class="cp-tag">' + esc(contratoPorId(c.ClienteID)) + '</span>' : '') + '</td><td>' + esc(c.Categoria) + (c.Cobravel !== 'Sim' ? '<br><span class="muted">não cobrar</span>' : '') + '</td><td class="money">' + (moneyN(c.Valor) ? brl(c.Valor) : '—') + '</td><td class="acts">' +
-            (c.Recebido || trav ? '<span class="muted" style="font-size:11px">cobrado</span>' : acoes(null, "editarCusta('" + id + "')", "excluirCusta('" + id + "')")) + '</td></tr>'; }).join('') + '</tbody></table></div>' + Pc.pager
+            (acoes(null, "editarCusta('" + id + "')", "excluirCusta('" + id + "')")) + '</td></tr>'; }).join('') + '</tbody></table></div>' + Pc.pager
         : vazio('Nenhuma custa ou audiência em ' + mesNome(comp) + '.'));
   } else {
     var l = f.procs.filter(function (p) { return PASTA_ABA === 'Arquivado' ? p.Situacao === 'Arquivado' : p.Situacao !== 'Arquivado'; })
@@ -393,10 +393,10 @@ window.renderConsultivo = function () {
   var P = paginar('co', l);
   $('coTabela').innerHTML = l.length ? '<table><thead><tr><th>Pasta do cliente</th><th>Contratadas</th><th>Trabalhadas em ' + esc(mesNome(comp)) + '</th><th>Excedente</th><th>Situação</th><th></th></tr></thead><tbody>' +
     P.itens.map(function (c) { var a = "abrirPastaCo('" + jsq(c.cliente) + "')";
-      var sit = c.travado ? '<span class="badge ok">cobrado · travado</span>' : c.excedenteDec > 0 ? '<span class="badge extra">acima do contrato</span>' : c.tarefas ? '<span class="badge ok">dentro do contrato</span>' : '<span class="badge cancel">sem lançamento</span>';
+      var sit = c.travado ? '<span class="badge ok">já cobrado' + (c.tarefas ? ' · ' + c.tarefas + ' tarefa(s)' : '') + '</span>' : c.excedenteDec > 0 ? '<span class="badge extra">acima do contrato</span>' : c.tarefas ? '<span class="badge ok">dentro do contrato</span>' : '<span class="badge cancel">sem lançamento</span>';
       return '<tr class="pasta-row" onclick="' + a + '"><td><div class="pasta-nome"><span class="pasta-ic">' + IC_PASTA + '</span><span><b>' + esc(c.cliente) + '</b><small>' + c.tarefas + ' tarefa(s)</small></span></div></td>' +
         '<td>' + (hDec(c.contratadas) ? hm(c.contratadas) : '—') + '</td><td><b>' + hm(c.consultivo) + '</b></td><td>' + (c.excedenteDec > 0 ? '<b style="color:var(--warn)">' + hm(c.excedente) + '</b>' : '—') + '</td><td>' + sit + '</td>' +
-        '<td class="acts" onclick="event.stopPropagation()">' + ib(ic('ver'), 'Abrir pasta', a) + (c.travado ? '' : ib(ic('upload'), 'Importar planilha', "abrirPastaCo('" + jsq(c.cliente) + "');escolherArquivo('co')")) + '</td></tr>';
+        '<td class="acts" onclick="event.stopPropagation()">' + ib(ic('ver'), 'Abrir pasta', a) + ib(ic('upload'), 'Importar planilha', "abrirPastaCo('" + jsq(c.cliente) + "');escolherArquivo('co')") + '</td></tr>';
     }).join('') + '</tbody></table>' + P.pager : vazio(fil === 'exc' ? 'Nenhum cliente acima do contrato em ' + mesNome(comp) + '.' : 'Nenhuma pasta encontrada.');
 };
 window.abrirPastaCo = function (nome) { PASTA_CO = nome; PG.pc = 1; renderPastaCo(); abrirModal('md_ver'); };
@@ -408,17 +408,18 @@ function tabelaTarefas(l, chave, tipo, trav, msgVazio) {
   if (!l.length) return vazio(msgVazio);
   return '<p class="pasta-nota" style="margin-top:-4px">Por advogado: ' + Object.keys(porAdv).sort().map(function (k) { return esc(k) + ' <b>' + decHm(porAdv[k]) + '</b>'; }).join(' · ') + '</p>' +
     '<div class="tbl-wrap"><table><thead><tr><th>Data</th><th>Tarefa</th><th>Advogado</th><th>Tempo</th><th></th></tr></thead><tbody>' +
-    P.itens.map(function (t) { var id = esc(t.ID), pode = !trav && (tipo === 'Proc' || t.Editavel);
+    P.itens.map(function (t) { var id = esc(t.ID), pode = tipo === 'Proc' || t.Editavel;
       return '<tr><td>' + fmtD(t.Data) + '</td><td>' + esc(t.Tarefa) + (t.Origem === 'Controladoria' ? ' <span class="muted" style="font-size:11px">(à mão)</span>' : '') + '</td><td>' + esc(t.Responsavel || '—') + '</td><td>' + hm(t.Duracao) + '</td><td class="acts">' +
         (pode ? acoes(null, (tipo === 'Proc' ? 'editarTarefaProc' : 'editarHoras') + "('" + id + "')", (tipo === 'Proc' ? 'excluirTarefaProc' : 'excluirHoras') + "('" + id + "')") : (trav ? '' : '<span class="muted" style="font-size:11px" title="Importada pelo Financeiro antes da Controladoria">importada</span>')) + '</td></tr>'; }).join('') +
     '</tbody></table></div>' + P.pager;
 }
 function renderPastaCo() {
   var comp = compSel(), mes = proxMes(comp);
-  var r = (RESUMO && RESUMO.clientes.filter(function (c) { return norm(c.cliente) === norm(PASTA_CO); })[0]) || { contratadas: '', consultivo: '0:00', excedente: '0:00', excedenteDec: 0, tarefas: 0 };
+  var hsCad = D.clientes.filter(function (x) { return norm(x.Nome) === norm(PASTA_CO) && isAtivo(x); }).reduce(function (a, x) { return Math.max(a, hDec(x.HorasContratadas)); }, 0);
+  var r = (RESUMO && RESUMO.clientes.filter(function (c) { return norm(c.cliente) === norm(PASTA_CO); })[0]) || { contratadas: hsCad ? decToHMSjs(hsCad) : '', consultivo: '0:00', excedente: '0:00', excedenteDec: 0, tarefas: 0 };
   var l = D.consultivo.filter(function (c) { return c.Mes === mes && norm(c.Cliente) === norm(PASTA_CO); });
   var trav = travadoNoMes(PASTA_CO);
-  var h = '<div class="pasta" data-pasta="co"><div class="pasta-top">' + (trav ? '' : '<button class="btn sm" onclick="escolherArquivo(\'co\')">' + ic('upload') + ' Importar planilha</button><button class="btn sm ghost" onclick="baixarModelo(\'co\')">Baixar modelo</button><button class="btn sm ghost" onclick="novaTarefaCo()">' + ic('mais') + ' Nova tarefa</button>') + seletorMes() + '</div>' +
+  var h = '<div class="pasta" data-pasta="co"><div class="pasta-top">' + ('<button class="btn sm" onclick="escolherArquivo(\'co\')">' + ic('upload') + ' Importar planilha</button><button class="btn sm ghost" onclick="baixarModelo(\'co\')">Baixar modelo</button><button class="btn sm ghost" onclick="novaTarefaCo()">' + ic('mais') + ' Nova tarefa</button>') + seletorMes() + '</div>' +
     '<div class="pasta-kpis"><div><span>Contratadas no mês</span><b>' + (hDec(r.contratadas) ? hm(r.contratadas) : '—') + '</b></div>' +
     '<div><span>Trabalhadas em ' + esc(mesNome(comp)) + '</span><b>' + hm(r.consultivo) + '</b></div>' +
     '<div class="' + (r.excedenteDec > 0 ? 'warn' : '') + '"><span>Excedente</span><b>' + (r.excedenteDec > 0 ? hm(r.excedente) : '0h00') + '</b></div></div>' +
@@ -460,7 +461,7 @@ window.importarTarefas = function (inp) {
   };
   rd.readAsArrayBuffer(f);
 };
-function textoIntegracao(x) { if (!x) return ''; if (x.erro) return '<br><b>Atenção:</b> o Contas a Receber não foi atualizado (' + esc(x.erro) + '). Ficou registrado nas pendências.'; if (x.travado) return '<br>Este mês já foi cobrado pelo Financeiro: o Receber não foi alterado.'; return '<br>Contas a Receber atualizado.'; }
+function textoIntegracao(x) { if (!x) return ''; if (x.erro) return '<br><b>Atenção:</b> o Contas a Receber não foi atualizado (' + esc(x.erro) + '). Ficou registrado nas pendências.'; if (x.travado) return '<br>Mês já cobrado pelo Financeiro: ficou no histórico e no relatório, sem mexer no Contas a Receber.'; return '<br>Contas a Receber atualizado.'; }
 function blocoImport(key) {
   var r = IMP_RES[key]; if (!r) return '';
   if (r.carregando) return '<div class="pasta-res">Importando "' + esc(r.arquivo) + '"…</div>';
@@ -840,11 +841,85 @@ function raTitulos(ano) { return {
   7: ['Prioridades ' + (+ano + 1), 'Do histórico ao', 'plano de ação.'],
   8: ['Próximo ciclo', 'Parceria e visão de', 'longo prazo.'] }; }
 function raSec(n, T) { var t = T[n]; return '<div class="ra-sec"><div class="ra-eyebrow"><span>' + ('0' + n).slice(-2) + '</span>' + esc(t[0]) + '</div><h3 class="ra-h">' + esc(t[1]) + ' <em>' + esc(t[2]) + '</em></h3>'; }
+/* ---------- análises prontas a partir dos dados (a Ana só revisa) ---------- */
+var RA_TEMAS = [
+  { k: 'Trabalhista e RH', re: /trabalh|\brh\b|funcion|empregad|demiss|rescis|ponto|jornada|banco de horas|regulament|sindic|\bcct\b|esocial|admiss|ferias|terceiriz|colaborador|salari|folha/,
+    prob: 'Rotinas de pessoal com potencial de gerar reclamações trabalhistas', ori: 'Orientação sobre jornada, documentação, desligamentos e políticas internas, com os ajustes necessários', cuid: 'Auditar a cada semestre os controles de jornada e os documentos de admissão e desligamento' },
+  { k: 'Contratos', re: /contrat|aditivo|distrato|minuta|locacao|fornecedor|prestacao de servic|clausula|nda|confidencialidade/,
+    prob: 'Negociação e formalização de contratos com clientes, fornecedores e parceiros', ori: 'Revisão de cláusulas de responsabilidade, multa, prazo e rescisão para equilibrar os riscos', cuid: 'Padronizar modelos e passar pelo jurídico antes de renovações e aditivos' },
+  { k: 'Societário', re: /societ|contrato social|alteracao contratual|holding|socio|quotas|assembl|\bata\b|cnpj|junta comercial/,
+    prob: 'Organização da estrutura societária e das decisões entre sócios', ori: 'Ajustes em atos societários e orientação sobre direitos e deveres dos sócios', cuid: 'Revisar o acordo de sócios e manter os atos societários atualizados' },
+  { k: 'Tributário e fiscal', re: /tribut|fiscal|imposto|icms|\biss\b|\bpis\b|cofins|receita federal|parcelament|nota fiscal|irpj|csll/,
+    prob: 'Dúvidas e exposições tributárias da operação', ori: 'Análise do enquadramento e das alternativas para reduzir o risco fiscal', cuid: 'Revisar o enquadramento tributário e acompanhar prazos de parcelamentos' },
+  { k: 'Cobrança e crédito', re: /cobran|notifica|protest|inadimpl|execuc|credito|divida|acordo extrajudicial/,
+    prob: 'Valores a receber em atraso e clientes inadimplentes', ori: 'Notificações e negociação para recuperar créditos sem precisar de ação judicial', cuid: 'Definir uma rotina de cobrança com prazos e garantias nos contratos' },
+  { k: 'LGPD e compliance', re: /lgpd|dados pessoais|privacidade|compliance|politica|codigo de conduta|canal de denun|anticorrup/,
+    prob: 'Adequação a regras de proteção de dados e conduta', ori: 'Orientação sobre políticas internas, termos e tratamento de dados', cuid: 'Revisar as políticas uma vez por ano e treinar a equipe' },
+  { k: 'Imobiliário', re: /imov|escritura|matricula|registro de im|aluguel|condomin|usucapi/,
+    prob: 'Regularização e negociação de imóveis', ori: 'Análise documental e orientação sobre a operação imobiliária', cuid: 'Manter a documentação dos imóveis regularizada e atualizada' },
+  { k: 'Pareceres e consultas', re: /parecer|consulta|analise|orienta|duvida|estudo/,
+    prob: 'Decisões da gestão que precisavam de análise jurídica', ori: 'Pareceres e orientações com a posição jurídica e os riscos de cada caminho', cuid: 'Consultar o jurídico antes de decisões relevantes' },
+  { k: 'Reuniões e alinhamentos', re: /reuni|alinhament|\bcall\b|atendimento|visita/,
+    prob: 'Alinhamento de demandas com a gestão', ori: 'Reuniões para priorizar demandas e esclarecer dúvidas da equipe', cuid: 'Manter uma reunião periódica de acompanhamento' }
+];
+var RA_OUTROS = { k: 'Demandas gerais', prob: 'Demandas jurídicas do dia a dia da empresa', ori: 'Atendimento e orientação conforme cada demanda', cuid: 'Registrar as demandas para identificar as mais recorrentes' };
+function minus1(s) { return String(s || '').replace(/^./, function (c) { return c.toLowerCase(); }); }
+function temaDe(t) { var n = norm(t); for (var i = 0; i < RA_TEMAS.length; i++) if (RA_TEMAS[i].re.test(n)) return RA_TEMAS[i]; return RA_OUTROS; }
+function porTema(tarefas) {
+  var g = {};
+  tarefas.forEach(function (t) { var T = temaDe(t.t); var x = g[T.k] = g[T.k] || { T: T, n: 0, h: 0, ex: {} }; x.n++; x.h += t.h || 0; var k = norm(t.t); if (k) x.ex[k] = x.ex[k] || t.t; });
+  return Object.keys(g).map(function (k) { var x = g[k]; x.exemplos = Object.keys(x.ex).slice(0, 2).map(function (e) { return x.ex[e]; }); return x; }).sort(function (a, b) { return b.h - a.h || b.n - a.n; });
+}
+function primeiraParte(p, cliente) {
+  var s = String(p || '').split(/\s+x\s+/i), cn = norm(cliente).split(' ')[0];
+  var outra = s.filter(function (x) { return norm(x).indexOf(cn) < 0; })[0] || s[0] || '';
+  return outra.replace(/\s+e outros?$/i, '').trim();
+}
+function analiseRiscos(d, areas, vals, tot) {
+  var l = d.processos.lista || [], frases = [];
+  if (!l.length) return '';
+  var top = areas[0], doTop = l.filter(function (p) { return p.area === top; });
+  var novos = doTop.filter(function (p) { return p.inicio && p.inicio.slice(0, 7) >= d.de && p.inicio.slice(0, 7) <= d.ate; }).length;
+  var soma = doTop.reduce(function (a, p) { return a + (p.valorCausa || 0); }, 0);
+  frases.push('Na área ' + minus1(top) + ', ' + (doTop.length === 1 ? (novos ? 'a única ação começou no período' : 'a única ação vem de período anterior') : novos ? novos + ' das ' + doTop.length + ' ações começaram no período' : 'as ' + doTop.length + ' ações vêm de períodos anteriores') + (soma ? ', com ' + brl(soma) + ' em causas (média de ' + brl(soma / doTop.length) + ' por ação)' : '') + '.');
+  var maior = l.slice().sort(function (a, b) { return (b.valorCausa || 0) - (a.valorCausa || 0); })[0];
+  if (maior && maior.valorCausa) frases.push('A maior exposição é o processo ' + (maior.numero || '') + ' (' + maior.area.toLowerCase() + '), com ' + brl(maior.valorCausa) + ' em discussão' + (maior.situacao === 'Arquivado' ? ', já encerrado' : '') + '.');
+  var cont = {}; l.forEach(function (p) { var n = primeiraParte(p.partes, d.cliente); if (n) { var k = norm(n); cont[k] = cont[k] || { n: n, q: 0 }; cont[k].q++; } });
+  var rec = Object.keys(cont).map(function (k) { return cont[k]; }).filter(function (x) { return x.q > 1; });
+  if (rec.length) frases.push('Há partes que aparecem em mais de uma ação (' + rec.slice(0, 3).map(function (x) { return x.n + ': ' + x.q; }).join('; ') + '), o que indica um mesmo fato gerando mais de um processo.');
+  var meses = {}; l.forEach(function (p) { var m = (p.inicio || '').slice(0, 7); if (m >= d.de && m <= d.ate) meses[m] = (meses[m] || 0) + 1; });
+  var mm = Object.keys(meses).sort(function (a, b) { return meses[b] - meses[a]; })[0];
+  if (mm && meses[mm] > 1) frases.push('O mês com mais ações novas foi ' + mesNome(mm) + ' (' + meses[mm] + ').');
+  if (/trabalh/i.test(top)) frases.push('Em ações trabalhistas, a origem costuma estar em controle de jornada, verbas rescisórias e documentação de admissão e desligamento: vale cruzar esses pontos com as rotinas internas de RH.');
+  return frases.join(' ');
+}
+function linhasConsultivo(d) {
+  var g = porTema((d.tarefasDetalhe || []).filter(function (t) { return t.c; }));
+  return g.slice(0, RA_CONS).map(function (x) {
+    return [x.T.k + ' (' + x.n + ' demanda' + (x.n > 1 ? 's' : '') + ', ' + decHm(x.h) + ')', x.T.prob + (x.exemplos.length ? '. Ex.: ' + x.exemplos.join('; ') : ''), x.T.ori, x.T.cuid];
+  });
+}
+function motivoPico(d, pico) {
+  if (!pico) return '';
+  var g = porTema((d.tarefasDetalhe || []).filter(function (t) { return t.m === pico.mes; }));
+  if (!g.length) return '';
+  return 'O volume se concentrou em ' + g.slice(0, 3).map(function (x) { return minus1(x.T.k) + ' (' + x.n + ' tarefa' + (x.n > 1 ? 's' : '') + ', ' + decHm(x.h) + ')'; }).join(', ') + '.';
+}
+function entregasPorTema(d) {
+  var c = porTema((d.tarefasDetalhe || []).filter(function (t) { return t.c; })), p = porTema((d.tarefasDetalhe || []).filter(function (t) { return !t.c; }));
+  var l = c.slice(0, 5).map(function (x) { return '• ' + x.T.k + ': ' + x.n + ' demanda' + (x.n > 1 ? 's' : '') + (x.exemplos.length ? ' (ex.: ' + x.exemplos[0] + ')' : ''); });
+  if (p.length) l.push('• Processual: ' + p.reduce(function (a, x) { return a + x.n; }, 0) + ' atos registrados' + (p[0].exemplos.length ? ' (ex.: ' + p[0].exemplos[0] + ')' : ''));
+  return l.join('\n');
+}
 function sugestoesPrioridades(d, areaTop, pctTop) {
   var l = [];
   if (/trabalh/i.test(areaTop) && pctTop >= 40) l.push(['Reduzir o passivo trabalhista', 'Revisar rotinas de RH: contratos, controle de jornada, pagamentos e desligamentos', 'RH do cliente com a DH LAW', 'Novas reclamatórias por trimestre']);
   else if (areaTop) l.push(['Reduzir as demandas da área ' + areaTop.toLowerCase(), 'Mapear a origem das ações e corrigir os procedimentos internos', 'Gestão do cliente com a DH LAW', 'Novas ações por trimestre']);
-  l.push(['Acompanhar de perto os processos ativos', 'Reunião trimestral de andamento, riscos e provisões', 'DH LAW', 'Processos com decisão favorável (%)']);
+  var e = d.economia || {};
+  if (e.semResultado) l.push(['Encaminhar os processos em discussão', 'Avaliar acordo ou estratégia de defesa nos ' + e.semResultado + ' processo(s) sem resultado (' + brl(e.emDiscussao || 0) + ' em causas)', 'DH LAW com a diretoria', 'Processos encerrados e valor economizado']);
+  else l.push(['Acompanhar de perto os processos ativos', 'Reunião trimestral de andamento, riscos e provisões', 'DH LAW', 'Processos com decisão favorável (%)']);
+  var tc = porTema((d.tarefasDetalhe || []).filter(function (t) { return t.c; }))[0];
+  if (tc && tc.T !== RA_OUTROS) l.push(['Prevenção em ' + minus1(tc.T.k), tc.T.cuid, 'Gestão do cliente com a DH LAW', 'Demandas de ' + minus1(tc.T.k) + ' por trimestre']);
   l.push(['Fortalecer a prevenção consultiva', 'Validar com o jurídico contratos e decisões relevantes antes de assinar', 'Diretoria com a DH LAW', 'Consultas preventivas por mês']);
   while (l.length < RA_PRI) l.push(['', '', '', '']);
   return l.slice(0, RA_PRI);
@@ -881,12 +956,12 @@ function renderRelatorio(d) {
   if (areas.length) h += '<div class="donut-wrap"><div class="donut" style="background:' + conic(vals) + '"><b>' + tot + '<small>processos</small></b></div><div class="leg">' +
     areas.map(function (a, i) { return '<div><i style="background:' + CORES[i % CORES.length] + '"></i>' + ed('area' + i, a) + ': <b contenteditable="true" data-k="areaN' + i + '">' + vals[i] + '</b> (' + pct(vals[i], tot) + '%)</div>'; }).join('') + '</div></div>';
   h += ed('riscoTxt', areaTop ? 'A área ' + areaTop.toLowerCase() + ' concentra ' + pctTop + '% dos processos (' + (vals[0] || 0) + ' de ' + tot + '), sendo hoje a principal fonte de risco jurídico da empresa.' : 'Nenhum processo no período.', 'div', ' class="ra-narr"') +
-    '<div class="ra-lbl">Fatores que originam as demandas</div>' + ph('riscoAnalise', '', 'Ex.: desligamentos sem documentação, horas extras, terceirizados, contratos com fornecedores…', 'div', ' class="ra-narr ra-edit"') + '</div>';
+    '<div class="ra-lbl">Fatores que originam as demandas</div>' + ph('riscoAnalise', analiseRiscos(d, areas, vals, tot), 'Ex.: desligamentos sem documentação, horas extras, terceirizados, contratos com fornecedores…', 'div', ' class="ra-narr ra-edit"') + '</div>';
   // 5. atuação consultiva
-  var temas = (d.consultoriasSugestao || []).slice(0, RA_CONS);
+  var linC = linhasConsultivo(d);
   h += raSec(5, T) + '<div class="tbl-wrap"><table class="ra-tab"><thead><tr><th>Tema</th><th>Problema enfrentado</th><th>Orientação prestada</th><th>Próximo cuidado recomendado</th></tr></thead><tbody>';
-  for (var i = 0; i < RA_CONS; i++) h += '<tr><td>' + ph('ct' + i + 'a', temas[i] || '', 'Tema') + '</td><td>' + ph('ct' + i + 'b', '', 'Problema') + '</td><td>' + ph('ct' + i + 'c', '', 'Orientação') + '</td><td>' + ph('ct' + i + 'd', '', 'Próximo cuidado') + '</td></tr>';
-  h += '</tbody></table></div><p class="ra-src">Os temas vieram das tarefas de consultivo lançadas no período. Linhas vazias não vão para o PowerPoint.</p></div>';
+  for (var i = 0; i < RA_CONS; i++) { var r0 = linC[i] || ['', '', '', '']; h += '<tr><td>' + ph('ct' + i + 'a', r0[0], 'Tema') + '</td><td>' + ph('ct' + i + 'b', r0[1], 'Problema') + '</td><td>' + ph('ct' + i + 'c', r0[2], 'Orientação') + '</td><td>' + ph('ct' + i + 'd', r0[3], 'Próximo cuidado') + '</td></tr>'; }
+  h += '</tbody></table></div><p class="ra-src">Montado a partir das tarefas de consultivo do período, agrupadas por tema. Revise e ajuste; linhas vazias não vão para o PowerPoint.</p></div>';
   // 6. dedicação
   var pico = d.horas.meses.slice().sort(function (a, b) { return (b.consultivo + b.processual) - (a.consultivo + a.processual); })[0];
   h += raSec(6, T) + '<div class="ra-kpis">' +
@@ -896,8 +971,8 @@ function renderRelatorio(d) {
     '<div class="tbl-wrap"><table id="raHoras"><thead><tr><th>Mês</th><th>Consultivo</th><th>Processual</th><th>Total</th></tr></thead><tbody>' +
     d.horas.meses.map(function (m, j) { return '<tr><td>' + mesNome(m.mes) + '</td><td>' + ed('hc' + j, decHm(m.consultivo)) + '</td><td>' + ed('hp' + j, decHm(m.processual)) + '</td><td>' + decHm(m.consultivo + m.processual) + '</td></tr>'; }).join('') + '</tbody></table></div>' +
     '<div class="ra-lbl">Picos de atividade</div>' + ed('picoTxt', pico && (pico.consultivo + pico.processual) > 0 ? 'O maior volume de trabalho foi em ' + mesNome(pico.mes) + ', com ' + decHm(pico.consultivo + pico.processual) + ' registradas. ' : '', 'div', ' class="ra-narr"') +
-    ph('picoMotivo', '', 'Explique o que motivou o pico (ex.: auditoria, reestruturação, audiências concentradas…)', 'div', ' class="ra-narr ra-edit"') +
-    '<div class="ra-lbl">Principais entregas do período</div>' + ed('entregas', [].concat(d.consultoriasSugestao || []).slice(0, 5).concat((d.processualSugestao || []).slice(0, 3)).map(function (x) { return '• ' + x; }).join('\n') || '', 'div', ' class="ra-narr" style="white-space:pre-line"') + '</div>';
+    ph('picoMotivo', motivoPico(d, pico), 'Explique o que motivou o pico (ex.: auditoria, reestruturação, audiências concentradas…)', 'div', ' class="ra-narr ra-edit"') +
+    '<div class="ra-lbl">Principais entregas do período</div>' + ed('entregas', entregasPorTema(d), 'div', ' class="ra-narr" style="white-space:pre-line"') + '</div>';
   // 7. prioridades
   var pr = sugestoesPrioridades(d, areaTop, pctTop);
   h += raSec(7, T) + '<div class="tbl-wrap"><table class="ra-tab"><thead><tr><th>Prioridade</th><th>Medida recomendada</th><th>Responsável</th><th>Indicador</th></tr></thead><tbody>' +
@@ -913,9 +988,14 @@ function val(k) { var e = document.querySelector('#raPrev [data-k="' + k + '"]')
 function horasNum(s) { var m = String(s).match(/(\d+)\s*h\s*(\d+)?/); if (m) return (+m[1]) + (+(m[2] || 0)) / 60; return hDec(s) || parseFloat(String(s).replace(',', '.')) || 0; }
 var PPTX_LIB = 'https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
 function logoPng(cb) {
-  // a logo em PNG de alta resolução, a partir do SVG oficial (o PowerPoint não lê SVG em todas as versões)
-  var img = new Image(); img.onload = function () { try { var c = document.createElement('canvas'); c.width = 1018; c.height = 541; c.getContext('2d').drawImage(img, 0, 0, 1018, 541); cb(c.toDataURL("image/png").replace(/^data:/, "")); } catch (e) { cb(null); } };
-  img.onerror = function () { cb(null); }; img.src = 'dh-logo.svg';
+  // a logo em PNG de alta resolução a partir do SVG oficial: versão com letras claras (fundo escuro) e escuras (fundo claro)
+  function render(svgTxt, done) {
+    var img = new Image(); img.onload = function () { try { var c = document.createElement('canvas'); c.width = 1018; c.height = 541; c.getContext('2d').drawImage(img, 0, 0, 1018, 541); done(c.toDataURL('image/png').replace(/^data:/, '')); } catch (e) { done(null); } };
+    img.onerror = function () { done(null); }; img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgTxt);
+  }
+  fetch('dh-logo.svg').then(function (r) { return r.text(); }).then(function (t) {
+    render(t, function (clara) { render(t.replace(/#F4F4F4/gi, '#0B1A20'), function (escura) { cb({ clara: clara, escura: escura }); }); });
+  }, function () { cb({}); });
 }
 window.exportarPptx = function () {
   if (!window.PptxGenJS) {
@@ -947,7 +1027,7 @@ function montarPptx(LOGO) {
   var BG = fundoPng(false), BGC = fundoPng(true);
   var p = new PptxGenJS(); p.layout = 'LAYOUT_WIDE'; p.title = val('titulo');
   var nSlide = 1;
-  function logo(s, x, y, w) { if (LOGO) s.addImage({ data: LOGO, x: x, y: y, w: w, h: w * 541 / 1018 }); else s.addImage({ path: 'logo-dh.png', x: x, y: y, w: w, h: w * 0.5, sizing: { type: 'contain', w: w, h: w * 0.5 } }); }
+  function logo(s, x, y, w, escura) { var L = LOGO && (escura ? LOGO.escura : LOGO.clara); if (L) s.addImage({ data: L, x: x, y: y, w: w, h: w * 541 / 1018 }); else s.addImage({ path: 'logo-dh.png', x: x, y: y, w: w, h: w * 0.5, sizing: { type: 'contain', w: w, h: w * 0.5 } }); }
   function fundo(s, claro) { var b = claro ? BGC : BG; if (b) s.background = { data: b }; else s.background = { color: claro ? 'F3F6F7' : NEG }; }
   function base(num) {
     var s = p.addSlide(); fundo(s); nSlide++;
@@ -963,7 +1043,7 @@ function montarPptx(LOGO) {
   function card(s, x, y, w, h) { s.addShape(p.ShapeType.roundRect, { x: x, y: y, w: w, h: h, rectRadius: 0.18, fill: { color: CARD }, line: { color: '1E5C6B', width: 1 } }); }
   function kpi(s, x, y, w, lb, v, cor, sz) {
     card(s, x, y, w, 1.45);
-    s.addText(lb.toUpperCase(), { x: x + 0.2, y: y + 0.18, w: w - 0.4, h: 0.36, fontFace: F, fontSize: 8.5, bold: true, color: MUT, charSpacing: 1, valign: 'top' });
+    s.addText(lb.toUpperCase(), { x: x + 0.15, y: y + 0.18, w: w - 0.3, h: 0.36, fontFace: F, fontSize: w < 2 ? 7.5 : 8.5, bold: true, color: MUT, charSpacing: 1, valign: 'top' });
     s.addText(v, { x: x + 0.2, y: y + 0.6, w: w - 0.4, h: 0.65, fontFace: F, fontSize: sz || (v.length > 12 ? 18 : 26), bold: true, color: cor || BR, fit: 'shrink' });
   }
   function texto(s, t, x, y, w, hh, sz, extra) { if (!t) return; s.addText(t, Object.assign({ x: x, y: y, w: w, h: hh, fontFace: F, fontSize: sz || 14, color: TX, valign: 'top', paraSpaceAfter: 6 }, extra || {})); }
@@ -992,7 +1072,7 @@ function montarPptx(LOGO) {
   s3.addShape(p.ShapeType.line, { x: 0.6, y: 0.62, w: 0.4, h: 0, line: { color: CIANO, width: 2 } });
   s3.addText(('03  ·  ' + T[3][0]).toUpperCase(), { x: 1.1, y: 0.45, w: 8, h: 0.34, fontFace: F, fontSize: 10, bold: true, color: '1595AE', charSpacing: 2 });
   s3.addText([{ text: T[3][1] + ' ', options: { color: '0B1A20' } }, { text: T[3][2], options: { color: '1595AE' } }], { x: 0.6, y: 0.85, w: 10.6, h: 0.85, fontFace: F, fontSize: 30, bold: true });
-  if (LOGO) { s3.addShape(p.ShapeType.roundRect, { x: 11.7, y: 0.32, w: 1.3, h: 0.82, rectRadius: 0.12, fill: { color: NEG } }); logo(s3, 11.8, 0.38, 1.1); }
+  logo(s3, 11.8, 0.4, 1.1, true);
   [['Valor das causas', 'eCausa', '0B1A20'], ['Valores pagos (condenações e acordos)', 'ePago', 'C2541C'], ['Valores recebidos', 'eRec', '1E8A5A'], ['Saving', 'eSaving', '1E8A5A']].forEach(function (k, j) {
     var x = 0.6 + j * 3.07; s3.addShape(p.ShapeType.roundRect, { x: x, y: 2.1, w: 2.92, h: 1.5, rectRadius: 0.18, fill: { color: 'FFFFFF' }, line: { color: 'D4DCDF', width: 1 } });
     s3.addText(k[0].toUpperCase(), { x: x + 0.2, y: 2.25, w: 2.55, h: 0.4, fontFace: F, fontSize: 8.5, bold: true, color: '5F6D74', valign: 'top' });
