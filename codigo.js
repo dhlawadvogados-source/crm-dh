@@ -1423,6 +1423,50 @@ function gravarPorHeader_(sh, objList){
   rng.setValues(matrix);
 }
 
+/* ===== Reembolsos da folha que são do cliente -> Contas a Receber =====
+   Lançamento de Reembolso no salário com o campo "Cliente" preenchido vira cobrança para o cliente no Receber
+   do mesmo mês da folha (uma linha por cliente, Tipo "Outros", identificada como "Reembolso de despesas").
+   Pode rodar quantas vezes quiser: refaz só as linhas automáticas desse mês; as já cobradas/recebidas não mudam. */
+var REEMB_TAG = "auto:reembolso-folha";
+function reembNorm_(s){ return String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]+/g," ").replace(/\s+/g," ").trim(); }
+function reembClienteDe_(txt, clientes){
+  var t=reembNorm_(txt); if(!t) return null;
+  var ativos=clientes.filter(function(c){ var s=reembNorm_(c.Status); return s.indexOf("ativ")>=0 && s.indexOf("inativ")<0; });
+  function unico(lista){ var nomes={}; lista.forEach(function(c){ nomes[reembNorm_(c.Nome)]=c; }); var k=Object.keys(nomes); return k.length===1 ? nomes[k[0]] : null; }
+  var exato=clientes.filter(function(c){ return reembNorm_(c.Nome)===t; }); if(exato.length) return exato[0];
+  var cont=ativos.filter(function(c){ var n=reembNorm_(c.Nome); return (" "+n+" ").indexOf(" "+t)>=0 || n.indexOf(t)===0; });
+  var u=unico(cont); if(u) return u;
+  var cont2=ativos.filter(function(c){ var p=reembNorm_(c.Nome).split(" ")[0]; return p.length>=4 && t.indexOf(p)>=0; });
+  return unico(cont2);
+}
+function apiSincReembolsosCliente(mes){
+  try{
+    mes=String(mes||"").slice(0,7); if(!/^\d{4}-\d{2}$/.test(mes)) return err_("mês inválido");
+    var clientes=objRows_("Clientes"), grupos={}, naoAchados={}, travados=[];
+    objRows_("LancamentosSalario").forEach(function(l){
+      if(String(l.Mes||"").slice(0,7)!==mes || !/reembol/i.test(String(l.Tipo||""))) return;
+      var txt=String(l.Cliente||"").trim(); if(!txt) return;
+      var c=reembClienteDe_(txt, clientes); if(!c){ naoAchados[txt]=1; return; }
+      var g=grupos[c.Nome]=grupos[c.Nome]||{ nome:c.Nome, valor:0, itens:[] };
+      g.valor+=money_(l.Valor); g.itens.push(String(l.Descricao||"Despesa").trim()+" ("+l.Nome+") R$ "+brl2_(money_(l.Valor)));
+    });
+    var sim=function(v){ var s=String(v||"").toLowerCase(); return s==="sim"||s==="true"||s==="1"; };
+    objRows_("Receber").forEach(function(r){
+      if(String(r.Obs||"").indexOf(REEMB_TAG)!==0 || monthKeyOf_(r.Vencimento)!==mes) return;
+      if(sim(r.Cobrado)||sim(r.Recebido)){ travados.push(r.Cliente); delete grupos[r.Cliente]; return; } // já cobrado: não mexe
+      apiDelete("Receber", r.ID);
+    });
+    var criados=0;
+    Object.keys(grupos).forEach(function(k){
+      var g=grupos[k]; if(!(g.valor>0)) return;
+      var venc=firstReceberVenc_(g.nome, mes) || (mes+"-10");
+      var r=apiAdd("Receber", { Cliente:g.nome, Tipo:"Outros", IdentificarValor:"Reembolso de despesas", Vencimento:venc, Valor:round2_(g.valor), Cobrado:"Não", Recebido:"Não", Obs:REEMB_TAG+" | "+g.itens.join("; ") });
+      if(r && r.success) criados++;
+    });
+    return ok_({ criados:criados, naoAchados:Object.keys(naoAchados), travados:travados });
+  }catch(e){ return err_(e.message); }
+}
+
 /* ================= FOLHA DE SALARIOS ================= */
 function diasNoMes_(ym){ var p=ym.split("-"); return new Date(parseInt(p[0],10), parseInt(p[1],10), 0).getDate(); }
 function diasUteis_(ym){ var p=ym.split("-"),y=parseInt(p[0],10),m=parseInt(p[1],10)-1,dm=new Date(y,m+1,0).getDate(),c=0; for(var d=1;d<=dm;d++){ var wd=new Date(y,m,d).getDay(); if(wd>=1&&wd<=5)c++; } return c; }
@@ -1931,8 +1975,9 @@ function relatorioClienteData_(cliente, mes){
   // VALORES A COBRAR = espelho do Contas a Receber do cliente no mes (mensalidade, DET, processos, o que houver)
   var LBL={Mensal:"Mensalidade de assessoria",DET:"Mensalidade DET","Audiência":"Audiências",Consultivo:"Horas de consultivo (excedente)",Processual:"Processos / horas processuais",Reembolso:"Reembolso de custas",Outros:"Outros"};
   var agg={}, totalReceber=0;
-  objRows_("Receber").forEach(function(r){ if(eqNome_(r.Cliente,cliente) && monthKeyOf_(r.Vencimento)===mes){ var k=tipoKey_(r.Tipo); var v=money_(r.Valor); agg[k]=(agg[k]||0)+v; totalReceber+=v; } });
-  var ordem=["Mensal","DET","Audiência","Consultivo","Processual","Reembolso","Outros"];
+  objRows_("Receber").forEach(function(r){ if(eqNome_(r.Cliente,cliente) && monthKeyOf_(r.Vencimento)===mes){ var k=String(r.Obs||"").indexOf(REEMB_TAG)===0?"ReembDesp":tipoKey_(r.Tipo); var v=money_(r.Valor); agg[k]=(agg[k]||0)+v; totalReceber+=v; } });
+  LBL.ReembDesp="Reembolso de despesas";
+  var ordem=["Mensal","DET","Audiência","Consultivo","Processual","Reembolso","ReembDesp","Outros"];
   var cobrancas=[]; ordem.forEach(function(k){ if(round2_(agg[k]||0)>0) cobrancas.push({label:LBL[k]||k, valor:round2_(agg[k])}); });
   totalReceber=round2_(totalReceber);
   return {
