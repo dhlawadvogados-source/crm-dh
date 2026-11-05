@@ -1272,7 +1272,7 @@ function renderSalModal(){
      '<div class="mfield"><div class="ml">Tipo</div><select id="sl_tipo" onchange="slTipoChange()">'+SAL_TIPOS.map(function(t){return '<option>'+t+'</option>';}).join('')+'</select></div>'+
      '<div class="mfield"><div class="ml">Valor (R$)</div><input id="sl_valor" type="text" inputmode="decimal" placeholder="0,00"></div>'+
      '<div class="mfield" style="grid-column:span 2"><div class="ml">Descrição</div><input id="sl_desc" placeholder="ex.: AGILECARE, Acordo Amadah, estacionamento audiências"></div>'+
-     '<div class="mfield sl-cli"><div class="ml">Cliente (reembolso)</div><input id="sl_cli" placeholder="ex.: FRIGO, WATEK"></div>'+
+     '<div class="mfield sl-cli"><div class="ml">Cliente (reembolso) · vai para o Contas a Receber</div><input id="sl_cli" list="dlCliReemb" placeholder="escolha o cliente (vazio = despesa do escritório)"><datalist id="dlCliReemb">'+salClientesOpts()+'</datalist></div>'+
      '<div class="mfield sl-parc"><div class="ml">Parcela</div><div style="display:flex;gap:6px;align-items:center"><input id="sl_pa" style="width:64px" placeholder="1"><span>/</span><input id="sl_pt" style="width:64px" placeholder="2"></div></div>'+
      '</div>'+
      '<div style="margin:10px 0 4px"><button class="btn" style="background:#2f8f5b" onclick="salAddItem()">'+(editSalItem?'💾 Salvar alteração':'💾 Salvar lançamento')+'</button>'+(editSalItem?' <button class="btn" style="background:#8791a1" onclick="salCancelEdit()">Cancelar</button>':' <button class="btn" style="background:#23B9D6" onclick="salPuxarComissoes()">Puxar comissões do mês</button>')+'</div>';
@@ -1299,22 +1299,34 @@ function renderSalModal(){
 }
 function slTipoChange(){var t=(el('sl_tipo')?el('sl_tipo').value:'').toLowerCase();var cli=document.querySelector('.sl-cli'),parc=document.querySelector('.sl-parc');if(cli)cli.style.display=(t.indexOf('reembol')>=0)?'':'none';if(parc)parc.style.display=(t.indexOf('comiss')>=0||t.indexOf('emprest')>=0)?'':'none';}
 function salCancelEdit(){editSalItem=null;renderSalModal();}
+// Reembolso com cliente: o sistema lança a cobrança no Contas a Receber do cliente (mesmo mês da folha)
+function salClientesOpts(){ var v={}; (DATA.clientes||[]).forEach(function(c){ var st=String(c.Status||'').toLowerCase(); if(st.indexOf('inativ')<0&&c.Nome)v[c.Nome]=1; }); return Object.keys(v).sort().map(function(n){ return '<option value="'+String(n).replace(/"/g,'&quot;')+'">'; }).join(''); }
+function salSyncReemb(mes, cb){
+  call('apiSincReembolsosCliente',[mes],function(r){
+    var d=r&&r.data; var av=[];
+    if(r&&!r.success) av.push('Não consegui atualizar o Contas a Receber: '+(r.error||''));
+    if(d&&d.naoAchados&&d.naoAchados.length) av.push('Não encontrei no cadastro o cliente: '+d.naoAchados.join(', ')+'. Edite o reembolso e escolha o cliente da lista para ele ir para o Contas a Receber.');
+    if(d&&d.travados&&d.travados.length) av.push('Já estava cobrado/recebido no Receber e não foi alterado: '+d.travados.join(', ')+'.');
+    if(av.length) alert(av.join('\n\n'));
+    if(cb) cb();
+  });
+}
 function salAddItem(){
   var tipo=val('sl_tipo'),valor=parseMoney(val('sl_valor')),desc=val('sl_desc'),cli=val('sl_cli'),pa=val('sl_pa'),pt=val('sl_pt');
   if(!valor){alert('Informe o valor');return;}
   var obj={Mes:salColabMes,Nome:salColabNome,Tipo:tipo,Descricao:desc,Cliente:cli,Valor:valor,ParcelaAtual:pa,ParcelaTotal:pt};
-  if(editSalItem){var id=editSalItem;var arr=DATA.lancamentosSalario||[];for(var i=0;i<arr.length;i++){if(String(arr[i].ID)==String(id)){for(var k in obj)arr[i][k]=obj[k];break;}}editSalItem=null;renderSalModal();call('apiUpdateRow',['LancamentosSalario',id,obj],function(res){if(!res||!res.success)alert('Erro ao salvar');loadDataThen(function(){renderSalModal();renderSalarios();});});}
+  if(editSalItem){var id=editSalItem;var arr=DATA.lancamentosSalario||[];for(var i=0;i<arr.length;i++){if(String(arr[i].ID)==String(id)){for(var k in obj)arr[i][k]=obj[k];break;}}editSalItem=null;renderSalModal();var eraReemb=window._salEditEraReemb;call('apiUpdateRow',['LancamentosSalario',id,obj],function(res){if(!res||!res.success)alert('Erro ao salvar');var fim=function(){loadDataThen(function(){renderSalModal();renderSalarios();});};if(/reembol/i.test(tipo)||eraReemb)salSyncReemb(obj.Mes,fim);else fim();});}
   else{var tmp={ID:'tmp'+Date.now()};for(var k2 in obj)tmp[k2]=obj[k2];(DATA.lancamentosSalario=DATA.lancamentosSalario||[]).push(tmp);renderSalModal();
     var paN=parseInt(pa,10)||0,ptN=parseInt(pt,10)||0;
     call('apiAdd',['LancamentosSalario',obj],function(res){
       var newId=res&&res.data&&res.data.id;
       if(newId&&ptN>paN&&paN>=1){call('apiProjetarParcelas',[newId],function(r2){var n=(r2&&r2.data&&r2.data.criados)||0;loadDataThen(function(){renderSalModal();renderSalarios();});if(n>0)alert('Lancei também '+n+' parcela(s) futura(s) ('+(paN+1)+'/'+ptN+(ptN-paN>1?(' até '+ptN+'/'+ptN):'')+') nos próximos meses.');});}
-      else{loadDataThen(function(){renderSalModal();renderSalarios();});}
+      else{var fim=function(){loadDataThen(function(){renderSalModal();renderSalarios();});};if(/reembol/i.test(tipo))salSyncReemb(obj.Mes,fim);else fim();}
     });}
 }
 function salProjetar(id){call('apiProjetarParcelas',[id],function(res){if(res&&res.success){var n=res.data.criados||0;loadDataThen(function(){renderSalModal();renderSalarios();});alert(n>0?('Projetei '+n+' parcela(s) nos próximos meses.'):'Nenhuma parcela nova para projetar (já estavam lançadas ou já é a última).');}else alert('Erro: '+((res&&res.error)||''));});}
-function salEditItem(id){var x=(DATA.lancamentosSalario||[]).filter(function(r){return String(r.ID)==String(id);})[0];if(!x)return;editSalItem=id;renderSalModal();el('sl_tipo').value=x.Tipo||'Comissão';el('sl_valor').value=(x.Valor!=null&&x.Valor!=='')?String(x.Valor).replace('.',','):'';el('sl_desc').value=x.Descricao||'';el('sl_cli').value=x.Cliente||'';el('sl_pa').value=x.ParcelaAtual||'';el('sl_pt').value=x.ParcelaTotal||'';slTipoChange();window.scrollTo(0,0);}
-function salDelItem(id){if(!confirm('Excluir este lançamento?'))return;DATA.lancamentosSalario=(DATA.lancamentosSalario||[]).filter(function(r){return String(r.ID)!=String(id);});renderSalModal();call('apiDelete',['LancamentosSalario',id],function(res){loadDataThen(function(){renderSalModal();renderSalarios();});});}
+function salEditItem(id){var x=(DATA.lancamentosSalario||[]).filter(function(r){return String(r.ID)==String(id);})[0];if(!x)return;window._salEditEraReemb=/reembol/i.test(x.Tipo||'')&&String(x.Cliente||'').trim();editSalItem=id;renderSalModal();el('sl_tipo').value=x.Tipo||'Comissão';el('sl_valor').value=(x.Valor!=null&&x.Valor!=='')?String(x.Valor).replace('.',','):'';el('sl_desc').value=x.Descricao||'';el('sl_cli').value=x.Cliente||'';el('sl_pa').value=x.ParcelaAtual||'';el('sl_pt').value=x.ParcelaTotal||'';slTipoChange();window.scrollTo(0,0);}
+function salDelItem(id){if(!confirm('Excluir este lançamento?'))return;var _x=(DATA.lancamentosSalario||[]).filter(function(r){return String(r.ID)==String(id);})[0]||{};var _reemb=/reembol/i.test(_x.Tipo||'')&&String(_x.Cliente||'').trim(),_mes=_x.Mes||salColabMes;DATA.lancamentosSalario=(DATA.lancamentosSalario||[]).filter(function(r){return String(r.ID)!=String(id);});renderSalModal();call('apiDelete',['LancamentosSalario',id],function(res){var fim=function(){loadDataThen(function(){renderSalModal();renderSalarios();});};if(_reemb)salSyncReemb(_mes,fim);else fim();});}
 function salEditPassagemDias(){salEditingPassagem=true;renderSalModal();}
 function salCancelEditPassagem(){salEditingPassagem=false;renderSalModal();}
 function salSalvarPassagemDias(){
