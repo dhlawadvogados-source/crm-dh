@@ -13,6 +13,7 @@
 *{margin:0;padding:0;box-sizing:border-box;}
 :root{--bg:#eef0f4;--card:#fff;--ink:#151d33;--muted:#8a90a2;--line:#edeef3;--navy:#364B9B;--gold:#F86C2E;--sh:0 1px 3px rgba(16,24,40,.06),0 1px 2px rgba(16,24,40,.04);--sh2:0 6px 20px rgba(16,24,40,.08);}
 body{font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--ink);-webkit-font-smoothing:antialiased;}
+.tb-sair{margin-left:12px;padding:7px 14px;border:1px solid rgba(255,255,255,.35);border-radius:6px;color:#fff;font-size:11px;font-weight:600;letter-spacing:1.2px;text-transform:uppercase;text-decoration:none;cursor:pointer;transition:background .15s}.tb-sair:hover{background:rgba(255,255,255,.14)}
 .topbar{background:linear-gradient(120deg,#364B9B,#2B3E85);height:60px;display:flex;align-items:center;gap:18px;padding:0 22px;position:sticky;top:0;z-index:30;box-shadow:0 2px 16px rgba(54,75,155,.22);}
 .topbar .brand{display:flex;align-items:center;gap:11px;min-width:200px;}
 .topbar .brand img{height:32px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.2));}
@@ -162,7 +163,7 @@ input.rvenc:focus{border-color:var(--gold);background:#fff;box-shadow:0 0 0 3px 
 </script>
 <div class="sync-toast" id="syncToast"></div>
 <header class="topbar"><div class="tb-tela" id="tbTela">Painel</div>
-  <div class="tb-right2"><span class="tb-mes" id="tbMes"></span><span class="tb-ini" id="tbIni">DH</span></div><span class="who" id="who" style="display:none"></span>
+  <div class="tb-right2"><span class="tb-mes" id="tbMes"></span><span class="tb-ini" id="tbIni">DH</span><a id="btnSair" class="tb-sair" href="#" title="Sair da conta">Sair</a></div><span class="who" id="who" style="display:none"></span>
 </header>
 <div class="shell">
   <aside class="side"><div class="side-logo"><img src="logo-dh.png" alt="Domingues &amp; Herold"></div>
