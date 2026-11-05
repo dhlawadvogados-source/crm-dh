@@ -12,7 +12,13 @@ window.CRM_CONFIG = {
 
   // Se os dados na tela tiverem mais de X segundos, o CRM relê a
   // planilha antes da próxima ação (para pegar o que outra pessoa mudou).
-  RECARREGAR_APOS_SEGUNDOS: 20
+  RECARREGAR_APOS_SEGUNDOS: 20,
+
+  // CONTROLADORIA — endereço do servidor (Cloud Function "crm"). ENQUANTO ESTIVER VAZIO, o CRM
+  // funciona exatamente como antes (navegador falando direto com a planilha).
+  // Quando preencher, TODO acesso passa pelo servidor, que confere o perfil (aba Usuarios).
+  BACKEND_API: "https://southamerica-east1-crm-dh-law.cloudfunctions.net/crm",
+  PAGINA_CONTROLADORIA: "controladoria.html"
 };
 
 // Quem pode entrar continua definido em js/codigo.js (ALLOWED_EMAILS).

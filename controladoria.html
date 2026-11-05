@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Controladoria · DH LAW</title>
+<link rel="icon" type="image/png" href="logo-dh.png">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="dh-login.css?v=CTRL4">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="config.js?v=CTRL20"></script>
+<script src="gas-shim.js?v=CTRL19"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+/* Layout: sidebar fixo (igual ao CRM real) + topbar + área de conteúdo com telas que trocam por clique no menu.
+   Paleta e tipografia reaproveitadas 1:1 do CRM Financeiro DH LAW em produção, para parecer parte do mesmo sistema. */
+:root{
+  --dh-azul:#364B9B; --dh-marinho:#141D3F; --dh-marinho2:#1B2652;
+  --dh-ciano:#23B9D6; --dh-ciano-cl:#A9E3EF; --dh-laranja:#F26A2E;
+  --bg:#F3F5F9; --card:#FFFFFF; --ink:#16203A; --muted:#7A8297; --line:#E5E8EF;
+  --ok:#2F8F5B; --ok-bg:#EAF7F0; --warn:#B3792A; --warn-bg:#FDF3E3;
+  --r:8px; --sh:0 1px 2px rgba(20,29,63,.05); --sh2:0 8px 24px rgba(20,29,63,.10);
+  --side:236px;
+  padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+  color-scheme:light;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'Montserrat',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;
+  background:var(--bg); color:var(--ink);
+  padding-left:max(0px, env(safe-area-inset-left,0px));
+  padding-right:max(0px, env(safe-area-inset-right,0px));
+}
+a{text-decoration:none;color:inherit;}
+button{font-family:inherit;cursor:pointer;}
+
+/* banner de aviso (mockup, dados de exemplo) */
+
+/* sidebar */
+.shell{display:block;padding-left:var(--side);min-height:100vh;}
+.side{position:fixed;top:0;left:0;bottom:0;width:var(--side);background:var(--dh-marinho);padding:0 0 20px;z-index:40;overflow-y:auto;}
+.side-logo{height:88px;display:flex;align-items:center;justify-content:center;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:10px;}
+.side-logo img{height:40px;}
+.side-tag{text-align:center;color:var(--dh-ciano);font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;margin:-4px 0 14px;}
+nav{display:flex;flex-direction:column;gap:2px;}
+nav a{display:flex;align-items:center;gap:10px;border-radius:0;padding:14px 24px;font-size:12px;font-weight:500;
+  text-transform:uppercase;letter-spacing:1.1px;color:#C7CEE4;border-left:4px solid transparent;}
+nav a .ic{width:18px;height:18px;flex:none;}
+nav a:hover{background:rgba(255,255,255,.05);color:#fff;}
+nav a.active{background:var(--dh-marinho2);color:var(--dh-ciano);border-left-color:var(--dh-ciano);font-weight:700;}
+
+/* topbar */
+.topbar{position:sticky;top:30px;z-index:30;background:linear-gradient(120deg,var(--dh-marinho) 0%,var(--dh-marinho2) 100%);
+  height:56px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;color:#fff;}
+.topbar b{font-size:14.5px;font-weight:700;}
+.topbar .who{font-size:12px;color:var(--dh-ciano-cl);}
+
+main{padding:26px 28px 60px;max-width:1180px;}
+h1{font-size:21px;margin:0 0 4px;letter-spacing:-.2px;}
+.sub{color:var(--muted);font-size:13px;margin:0 0 22px;}
+
+.view{display:none;}
+.view.on{display:block;}
+
+/* grid de cards de status */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin-bottom:24px;}
+.stat{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px 20px;border-top:3px solid var(--dh-ciano);}
+.stat .lb{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700;margin-bottom:8px;}
+.stat .val{font-size:26px;font-weight:800;color:var(--dh-azul);line-height:1;}
+.stat .hint{font-size:12px;color:var(--muted);margin-top:6px;}
+.stat.warn{border-top-color:var(--dh-laranja);}
+.stat.warn .val{color:var(--dh-laranja);}
+
+.card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:20px 22px;margin-bottom:18px;}
+.card h2{font-size:15px;margin:0 0 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;}
+.card h2 span.t{font-weight:700;}
+
+.btn{background:var(--dh-azul);color:#fff;border:0;border-radius:6px;padding:10px 16px;font-size:12px;font-weight:700;
+  text-transform:uppercase;letter-spacing:.6px;}
+.btn:hover{background:#2B3D82;}
+.btn.ghost{background:transparent;color:var(--dh-azul);border:1.5px solid var(--dh-azul);}
+.btn.sync{background:var(--dh-ciano);color:#0B2E36;}
+.btn.sync:hover{background:#1ea3bd;}
+.btn:disabled{opacity:.5;cursor:not-allowed;}
+
+.search{display:flex;gap:10px;margin-bottom:16px;}
+.search input{flex:1;min-width:0;padding:11px 14px;border:1.5px solid var(--line);border-radius:6px;font-size:13.5px;font-family:inherit;}
+.search input:focus{outline:2px solid var(--dh-ciano);border-color:var(--dh-ciano);}
+
+table{width:100%;border-collapse:collapse;font-size:13px;}
+th{text-align:left;font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:700;
+  padding:0 10px 10px;border-bottom:1.5px solid var(--line);}
+td{padding:12px 10px;border-bottom:1px solid var(--line);vertical-align:middle;}
+tr:last-child td{border-bottom:0;}
+.tbl-wrap{overflow-x:auto;}
+.cliente{font-weight:600;}
+.muted{color:var(--muted);}
+
+.badge{display:inline-block;padding:3px 10px;border-radius:99px;font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;}
+.badge.incluso{background:#E7ECFA;color:var(--dh-azul);}
+.badge.extra{background:var(--warn-bg);color:var(--warn);}
+.badge.ok{background:var(--ok-bg);color:var(--ok);}
+.badge.pend{background:var(--warn-bg);color:var(--warn);}
+
+.formrow{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px;}
+.formrow label,.fgrid label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:5px;}
+.formrow input,.formrow select,.fgrid input,.fgrid select{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;}
+
+.toast{position:fixed;bottom:20px;left:calc(var(--side) + 20px);background:var(--ink);color:#fff;padding:12px 18px;
+  border-radius:8px;font-size:13px;box-shadow:var(--sh2);display:none;z-index:60;}
+.toast.show{display:block;}
+
+.example-note{font-size:11.5px;color:var(--muted);font-style:italic;margin:-6px 0 16px;}
+
+.seg{display:inline-flex;background:var(--bg);border:1.5px solid var(--line);border-radius:8px;padding:3px;margin-bottom:16px;}
+.seg button{background:transparent;border:0;padding:8px 16px;font-size:11.5px;font-weight:700;text-transform:uppercase;
+  letter-spacing:.4px;color:var(--muted);border-radius:6px;}
+.seg button.on{background:var(--card);color:var(--dh-azul);box-shadow:var(--sh);}
+.seg-view{display:none;}
+.seg-view.on{display:block;}
+.badge.late{background:#FBE7E7;color:#C13C3C;}
+.adv-card{background:var(--card);border-radius:var(--r);box-shadow:var(--sh);padding:18px 20px;margin-bottom:14px;}
+.adv-card .hd{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.adv-card .hd b{font-size:14.5px;}
+.adv-card .hd .cnt{font-size:12px;color:var(--muted);}
+.adv-card .hd .cnt b{font-size:12px;}
+.adv-card .hd .cnt .n-late{color:#C13C3C;font-weight:700;}
+.adv-card .hd .cnt .n-pend{color:var(--warn);font-weight:700;}
+
+/* responsivo: sidebar vira topo em telas estreitas */
+@media (max-width:760px){
+  .shell{padding-left:0;}
+  .side{position:static;width:100%;height:auto;}
+  .side-logo{height:60px;}
+  nav{flex-direction:row;overflow-x:auto;padding:0 8px 8px;}
+  nav a{white-space:nowrap;padding:10px 14px;border-left:none;border-bottom:4px solid transparent;}
+  nav a.active{border-left:none;border-bottom-color:var(--dh-ciano);}
+  .topbar{position:static;}
+  main{padding:18px 16px 50px;}
+  .toast{left:16px;right:16px;}
+}
+
+/* seletor de cliente com busca (autocomplete) */
+.cp{position:relative;}
+.cp::after{content:'';position:absolute;right:13px;top:50%;width:8px;height:8px;border:1.6px solid var(--muted);
+  border-width:0 1.6px 1.6px 0;transform:translateY(-65%) rotate(45deg);pointer-events:none;}
+.cp-list{position:absolute;left:0;right:auto;min-width:100%;width:max-content;max-width:min(560px,86vw);top:calc(100% + 4px);background:var(--card);border:1.5px solid var(--line);
+  border-radius:6px;box-shadow:var(--sh2);max-height:190px;overflow-y:auto;z-index:25;display:none;}
+.cp.open .cp-list{display:block;}
+.cp-list div{padding:9px 13px;font-size:13px;cursor:pointer;}
+.cp-list div:hover{background:var(--bg);}
+.cp-list .cp-empty{color:var(--muted);font-style:italic;cursor:default;}
+.cp-list .cp-empty:hover{background:transparent;}
+
+/* donut chart (css puro, pra relatórios) */
+.donut-wrap{display:flex;align-items:center;gap:22px;flex-wrap:wrap;margin-bottom:6px;}
+.donut{width:128px;height:128px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;position:relative;}
+.donut::before{content:'';position:absolute;inset:16px;border-radius:50%;background:var(--card);}
+.donut b{position:relative;font-size:18px;color:var(--ink);text-align:center;line-height:1.2;}
+.donut b small{display:block;font-size:9.5px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.4px;margin-top:1px;}
+.leg{display:flex;flex-direction:column;gap:9px;font-size:12.5px;}
+.leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px;vertical-align:middle;}
+
+/* Relatório Anual — pré-visualização editável */
+.edit-badge{display:inline-flex;align-items:center;gap:6px;background:var(--dh-ciano-cl);color:#0B2E36;font-size:10.5px;
+  font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:5px 11px;border-radius:99px;flex:none;}
+[contenteditable="true"]{border-radius:4px;transition:background .1s;cursor:text;}
+[contenteditable="true"]:hover{background:rgba(35,185,214,.10);}
+[contenteditable="true"]:focus{outline:2px solid var(--dh-ciano);background:#fff;}
+.ra-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:18px;}
+.ra-sec{margin-bottom:26px;}
+.ra-sec:last-child{margin-bottom:0;}
+.ra-sec h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dh-azul);margin:0 0 14px;
+  font-weight:800;padding-bottom:8px;border-bottom:1.5px solid var(--line);}
+.ra-narr{font-size:13.5px;line-height:1.65;}
+.ra-src{font-size:11.5px;color:var(--muted);font-style:italic;margin-top:8px;}
+tfoot td{font-weight:700;border-top:1.5px solid var(--line);}
+
+/* tela de login (mesma do CRM) */
+.lg-gate{display:none;position:fixed;inset:0;z-index:1000;background:var(--dh-marinho);
+  background-image:linear-gradient(120deg,rgba(54,75,155,.55) 0%,rgba(20,29,63,0) 60%);
+  align-items:center;justify-content:center;padding:24px 16px;overflow-y:auto;}
+.lg-gate.on{display:flex;}
+.lg-wrap{width:100%;max-width:430px;}
+.lg-box{background:#fff;color:var(--ink);padding:44px 40px 36px;position:relative;text-align:left;border-radius:8px;border-top:4px solid var(--dh-ciano);box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.lg-logo{height:58px;margin-bottom:26px;display:block;background:var(--dh-marinho);padding:10px 14px;border-radius:6px;box-sizing:content-box;}
+.lg-box h1{font-size:28px;line-height:1.15;margin:0 0 10px;font-weight:700;letter-spacing:-.3px;}
+.lg-box h1 strong{color:var(--dh-azul);display:block;}
+.lg-msg{font-size:14px;line-height:1.6;color:var(--muted);margin:0 0 24px;min-height:22px;}
+.lg-btn{display:inline-flex;align-items:center;gap:12px;background:var(--dh-azul);color:#fff;border:0;border-radius:4px;padding:13px 20px;font-family:'Montserrat',sans-serif;font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:1.2px;cursor:pointer;transition:.2s;}
+.lg-btn svg{background:#fff;padding:3px;border-radius:2px;box-sizing:content-box;}
+.lg-btn:hover{background:#2B3D82;}
+.lg-err{color:#B4441A;font-size:12.5px;margin:14px 0 0;}
+.lg-switch{display:none;margin-top:18px;color:var(--dh-azul);font-size:12px;text-decoration:underline;}
+.lg-gate.denied .lg-switch{display:inline-block;}
+.lg-foot{color:#8F9AC0;font-size:11px;text-transform:uppercase;letter-spacing:1.5px;margin-top:26px;text-align:center;}
+.lg-row{display:flex;gap:26px;flex-wrap:wrap;justify-content:center;align-items:stretch;width:100%;max-width:900px;}
+.lg-row .lg-wrap{width:auto;flex:1 1 380px;max-width:420px;display:flex;}
+.lg-row .lg-wrap .lg-box{width:100%;box-sizing:border-box;}
+.lg-btn-disabled{background:#9aa0ae!important;cursor:not-allowed!important;}
+.lg-btn-disabled:hover{background:#9aa0ae!important;}
+
+/* ---------- aviso "salvando" ---------- */
+.sync-toast{position:fixed;right:18px;bottom:18px;z-index:900;background:var(--dh-marinho);color:#fff;font-size:12px;font-weight:600;padding:10px 16px;border-radius:4px;border-left:4px solid var(--dh-ciano);opacity:0;transform:translateY(8px);transition:.25s;pointer-events:none;}
+.sync-toast.on{opacity:1;transform:none;}
+.sync-toast.ok{border-left-color:#2f8f5b;}
+.sync-toast.err{border-left-color:var(--dh-laranja);}
+.dh-cfg-grp{font-size:11px;letter-spacing:1.8px;text-transform:uppercase;font-weight:700;color:var(--dh-azul);padding:22px 2px 8px;}
+#finHead{margin:0 0 20px;}
+
+body.lg-open{overflow:hidden;}
+.topbar{top:0;}
+.topbar .who a{color:#fff;text-decoration:underline;margin-left:10px;cursor:pointer;}
+#loading{padding:60px 28px;color:var(--muted);font-size:14px;}
+.side-back{display:none;margin:14px 18px 0;padding:10px 12px;border:1px solid rgba(255,255,255,.18);border-radius:6px;color:#C7CEE4;font-size:11px;text-transform:uppercase;letter-spacing:1px;text-align:center;}
+.side-back:hover{color:#fff;border-color:var(--dh-ciano);}
+.formrow textarea{width:100%;padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;min-height:40px;resize:vertical;}
+.formrow .wide{grid-column:1/-1;}
+.acts{white-space:nowrap;text-align:right;}
+.lnk{background:none;border:0;color:var(--dh-azul);font-size:12px;font-weight:700;padding:4px 6px;text-decoration:underline;}
+.lnk.red{color:#C13C3C;}
+.btn.sm{padding:7px 11px;font-size:11px;}
+.btn.ok{background:var(--ok);} .btn.ok:hover{background:#277a4d;}
+.btn-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;}
+.toolbar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:16px 22px 4px;}
+.toolbar input,.toolbar select{padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px;font-family:inherit;}
+.toolbar input{flex:1;min-width:180px;}
+.empty{padding:22px;color:var(--muted);font-size:13px;text-align:center;}
+.badge.cancel{background:#EEF0F4;color:var(--muted);}
+.badge.info{background:#E3F6FA;color:#0B6B80;}
+.editing{outline:2px solid var(--dh-ciano);}
+.money{white-space:nowrap;}
+.adv-mail{display:flex;gap:6px;align-items:center;font-size:12px;color:var(--muted);}
+.adv-mail input{padding:6px 9px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;width:210px;font-family:inherit;}
+.ra-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:12px;}
+.toast.err{background:#9B2C2C;}
+
+.fc-status{display:flex;gap:10px;flex-wrap:wrap;align-items:center;font-size:13px;}
+.fc-status .big{font-size:15px;font-weight:700;color:var(--dh-marinho);}
+.fc-res{margin-top:14px;padding:12px 14px;border-radius:8px;background:var(--bg);font-size:12.5px;line-height:1.6;}
+.fc-res.warn{background:var(--warn-bg);}
+.mbg{display:none;position:fixed;inset:0;background:rgba(20,29,63,.45);z-index:80;align-items:flex-start;justify-content:center;padding:48px 16px;overflow-y:auto;}
+.mbg.on{display:flex;}
+.mdl{background:var(--card);border-radius:10px;width:100%;max-width:900px;padding:22px 24px;box-shadow:0 20px 60px rgba(20,29,63,.35);}
+.mdl h2{display:flex;align-items:center;gap:10px;font-size:16px;margin:0 0 16px;}
+.mdl .mx{order:2;margin-left:auto;background:none;border:0;font-size:18px;color:var(--muted);padding:2px 6px;}
+.mdl .mx:hover{color:var(--ink);}
+.mdl.editing{outline:none;}
+.pager{display:flex;align-items:center;justify-content:flex-end;gap:10px;padding:10px 16px;font-size:12px;color:var(--muted);border-top:1px solid var(--line);}
+.pager button{background:var(--card);border:1.5px solid var(--line);border-radius:6px;padding:4px 10px;font-size:13px;color:var(--dh-azul);}
+.pager button:disabled{opacity:.4;cursor:default;}
+.ficha{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 18px;font-size:13px;margin-bottom:16px;}
+.ficha div span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;margin-bottom:2px;}
+.ficha-sec{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:var(--dh-azul);font-weight:800;margin:16px 0 8px;padding-bottom:6px;border-bottom:1.5px solid var(--line);}
+.search .btn{flex:none;}
+.ico{vertical-align:-3px;flex:none;}
+.btn{display:inline-flex;align-items:center;gap:6px;}
+.ib{display:inline-flex;align-items:center;justify-content:center;width:30px;height:28px;margin-left:4px;background:var(--card);border:1.5px solid var(--line);border-radius:6px;color:var(--dh-azul);padding:0;}
+.ib:hover{background:#EEF1FA;border-color:var(--dh-azul);}
+.ib.red{color:#C13C3C;}
+.ib.red:hover{background:#FBE7E7;border-color:#C13C3C;}
+.edit-badge .ico{vertical-align:-2px;}
+td select.inl{padding:5px 8px;border:1.5px solid var(--line);border-radius:6px;font-size:12px;font-family:inherit;}
+.pasta-row{cursor:pointer;}
+.pasta-row:hover td{background:#F6F8FD;}
+.pasta-nome{display:flex;align-items:center;gap:12px;}
+.pasta-nome b{display:block;font-size:13.5px;color:var(--ink);}
+.pasta-nome small{display:block;font-size:11.5px;color:var(--muted);margin-top:2px;}
+.pasta-ic{width:36px;height:36px;border-radius:9px;background:#EEF1FA;color:var(--dh-azul);display:flex;align-items:center;justify-content:center;flex:none;}
+#verTitulo svg{vertical-align:-4px;color:var(--dh-azul);}
+.pasta-kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;}
+.pasta-kpis div{background:var(--bg);border-radius:10px;padding:12px 14px;}
+.pasta-kpis span{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:700;}
+.pasta-kpis b{display:block;font-size:24px;color:var(--dh-marinho);margin-top:4px;}
+.pasta-kpis .warn{background:var(--warn-bg);} .pasta-kpis .warn b{color:var(--warn);}
+.pasta-nota{font-size:12.5px;line-height:1.55;color:var(--muted);margin:0 0 14px;}
+.pasta-bar{margin-bottom:10px;}
+.seg{display:inline-flex;border:1.5px solid var(--line);border-radius:8px;overflow:hidden;}
+.seg button{background:var(--card);border:0;padding:7px 14px;font-size:12px;font-weight:600;color:var(--muted);font-family:inherit;}
+.seg button.on{background:var(--dh-azul);color:#fff;}
+.cp-list div[data-n]{display:flex;align-items:center;justify-content:space-between;gap:10px;}
+.cp-nome{white-space:nowrap;}
+.cp-tag{display:inline-block;flex:none;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:2px 8px;border-radius:99px;background:#E7ECFA;color:var(--dh-azul);white-space:nowrap;}
+.cp-sel{display:inline-block;margin-top:5px;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--dh-azul);background:#E7ECFA;border-radius:99px;padding:2px 8px;pointer-events:none;}
+.cp-sel:empty{display:none;}
+.mes-lbl{display:flex;align-items:center;gap:8px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);flex:none;}
+.mes-lbl input{padding:9px 10px;border:1.5px solid var(--line);border-radius:6px;font-family:inherit;font-size:13px;}
+.pasta-top{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px;}
+.pasta-top .mes-lbl{margin-left:auto;}
+.pasta-res{margin:0 0 12px;padding:10px 12px;border-radius:8px;background:var(--ok-bg);font-size:12.5px;line-height:1.55;}
+.pasta-res.warn{background:#FBE7E7;}
+.pasta-res ul{margin:6px 0 0;padding-left:18px;}
+.badge.aparte{background:#EEF0F4;color:#59607A;}
+.fsec{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dh-azul);font-weight:800;margin:6px 0 10px;padding-bottom:6px;border-bottom:1.5px solid var(--line);}
+.fgrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 14px;margin-bottom:16px;}
+.fgrid > div{min-width:0;}
+.fgrid .s2{grid-column:span 2;} .fgrid .s4{grid-column:1/-1;}
+.fgrid input,.fgrid select{box-sizing:border-box;}
+.fgrid small{display:block;margin-top:5px;font-size:11.5px;line-height:1.4;}
+@media(max-width:760px){.fgrid{grid-template-columns:1fr 1fr;} .fgrid .s2{grid-column:1/-1;}}
+.ra-capa{display:flex;align-items:center;gap:28px;background:linear-gradient(135deg,#141D3F,#1B2652 60%,#163B5C);color:#fff;border-radius:12px;padding:30px 32px;margin-bottom:26px;border-left:6px solid var(--dh-ciano);}
+.ra-capa img{width:150px;flex:none;}
+.ra-kicker{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--dh-ciano);font-weight:700;margin-bottom:8px;}
+.ra-cap-t{font-size:24px;font-weight:800;line-height:1.25;margin-bottom:8px;}
+.ra-cap-p{font-size:14px;color:#C9D1EA;}
+.ra-cap-f{font-size:11.5px;color:#A9E3EF;margin-top:14px;letter-spacing:.5px;}
+.ra-n{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:6px;background:var(--dh-azul);color:#fff;font-size:11px;margin-right:9px;}
+.ra-lbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:800;margin:14px 0 5px;}
+.ra-money{white-space:nowrap;letter-spacing:-.2px;}
+.ra-small{font-size:12.5px;color:var(--muted);}
+.ra-tab td{vertical-align:top;font-size:12.5px;min-width:120px;}
+.ra [contenteditable]{outline:none;border-radius:4px;transition:background .15s;}
+.ra [contenteditable]:hover,.ra [contenteditable]:focus{background:#EEF4FF;}
+.ra [contenteditable]:empty::before{content:attr(data-ph);color:#A3AAC0;font-style:italic;}
+.ra-edit{border:1.5px dashed var(--line);padding:8px 10px;min-height:40px;}
+.ra-tab [contenteditable]{display:block;min-height:22px;}
+/* relatório: na tela fica no padrão do sistema; o PowerPoint sai no estilo do site */
+#raPrev .ra-eyebrow{display:flex;align-items:center;gap:8px;font-size:10px;font-weight:800;letter-spacing:1px;text-transform:uppercase;color:var(--dh-azul);margin-bottom:4px;}
+#raPrev .ra-eyebrow span{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;border-radius:6px;background:var(--dh-azul);color:#fff;font-size:10.5px;}
+#raPrev .ra-h{font-size:17px;font-weight:800;color:var(--ink);margin:0 0 14px;padding-bottom:8px;border-bottom:1.5px solid var(--line);text-transform:none;letter-spacing:0;}
+#raPrev .ra-h em{font-style:normal;color:var(--dh-azul);}
+.pn-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.pn-grupo{font-size:11px;text-transform:uppercase;letter-spacing:.6px;color:var(--dh-azul);font-weight:800;margin:18px 0 10px;}
+.stat.link{cursor:pointer;transition:transform .12s,box-shadow .12s;}
+.stat.link:hover{transform:translateY(-2px);box-shadow:0 6px 18px rgba(20,29,63,.10);}
+.pn-cols{display:grid;grid-template-columns:1fr 1fr;gap:18px;margin-bottom:18px;}
+.pn-cols .card{margin:0;}
+@media(max-width:1000px){.pn-cols{grid-template-columns:1fr;}}
+.pn-bars{display:flex;align-items:flex-end;gap:10px;height:170px;padding:10px 4px 0;}
+.pn-bar{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;min-width:0;cursor:pointer;}
+.pn-bar .stk{width:100%;max-width:46px;display:flex;flex-direction:column-reverse;border-radius:6px 6px 0 0;overflow:hidden;background:#EEF1FA;}
+.pn-bar .stk i{display:block;}
+.pn-bar small{font-size:10.5px;color:var(--muted);white-space:nowrap;}
+.pn-bar b{font-size:10.5px;color:var(--ink);}
+.pn-bar.on small{color:var(--dh-azul);font-weight:800;}
+.pn-leg{display:flex;gap:16px;font-size:11.5px;color:var(--muted);margin-top:10px;}
+.pn-leg i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;vertical-align:-1px;}
+</style>
+</head>
+<body class="lg-open">
+
+<div class="lg-gate lx on" id="loginGate">
+  <div class="lx-art">
+    <svg class="lx-waves" viewBox="0 0 1100 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true"><path d="M-50,430 L-20,437 L10,444 L40,450 L70,455 L100,458 L130,460 L160,460 L190,459 L220,455 L250,449 L280,441 L310,431 L340,420 L370,406 L400,392 L430,376 L460,359 L490,342 L520,325 L550,308 L580,292 L610,277 L640,263 L670,251 L700,240 L730,232 L760,225 L790,221 L820,218 L850,218 L880,219 L910,222 L940,227 L970,232 L1000,239 L1030,246 L1060,253 L1090,260 L1120,266 L1150,271" opacity="0.05"/><path d="M-50,459 L-20,467 L10,473 L40,479 L70,483 L100,485 L130,485 L160,484 L190,480 L220,474 L250,466 L280,456 L310,443 L340,430 L370,414 L400,398 L430,380 L460,363 L490,345 L520,328 L550,311 L580,295 L610,281 L640,268 L670,257 L700,249 L730,242 L760,238 L790,235 L820,235 L850,237 L880,241 L910,246 L940,252 L970,259 L1000,267 L1030,275 L1060,282 L1090,289 L1120,295 L1150,300" opacity="0.08"/><path d="M-50,489 L-20,497 L10,503 L40,507 L70,510 L100,510 L130,509 L160,505 L190,499 L220,490 L250,480 L280,467 L310,453 L340,437 L370,420 L400,402 L430,383 L460,365 L490,347 L520,330 L550,313 L580,299 L610,286 L640,275 L670,266 L700,259 L730,255 L760,253 L790,253 L820,255 L850,259 L880,265 L910,272 L940,280 L970,288 L1000,297 L1030,305 L1060,312 L1090,319 L1120,324 L1150,327" opacity="0.10"/><path d="M-50,520 L-20,527 L10,531 L40,534 L70,535 L100,534 L130,530 L160,524 L190,515 L220,504 L250,491 L280,476 L310,459 L340,442 L370,423 L400,404 L430,385 L460,366 L490,348 L520,331 L550,316 L580,303 L610,292 L640,283 L670,276 L700,272 L730,270 L760,271 L790,274 L820,278 L850,284 L880,292 L910,301 L940,310 L970,319 L1000,328 L1030,336 L1060,343 L1090,348 L1120,352 L1150,353" opacity="0.12"/><path d="M-50,551 L-20,556 L10,559 L40,560 L70,559 L100,555 L130,549 L160,540 L190,528 L220,515 L250,499 L280,482 L310,463 L340,444 L370,424 L400,404 L430,385 L460,367 L490,349 L520,334 L550,320 L580,309 L610,300 L640,293 L670,289 L700,288 L730,289 L760,292 L790,297 L820,304 L850,312 L880,321 L910,331 L940,341 L970,350 L1000,359 L1030,367 L1060,372 L1090,376 L1120,378 L1150,378" opacity="0.15"/><path d="M-50,580 L-20,584 L10,585 L40,584 L70,580 L100,573 L130,564 L160,552 L190,538 L220,522 L250,504 L280,485 L310,465 L340,445 L370,424 L400,404 L430,385 L460,367 L490,351 L520,337 L550,326 L580,317 L610,310 L640,306 L670,305 L700,306 L730,310 L760,316 L790,323 L820,332 L850,342 L880,353 L910,363 L940,373 L970,382 L1000,390 L1030,397 L1060,401 L1090,403 L1120,403 L1150,400" opacity="0.17"/><path d="M-50,609 L-20,610 L10,609 L40,605 L70,598 L100,589 L130,576 L160,562 L190,545 L220,527 L250,507 L280,486 L310,465 L340,444 L370,423 L400,403 L430,385 L460,369 L490,355 L520,343 L550,333 L580,327 L610,323 L640,322 L670,324 L700,328 L730,335 L760,343 L790,352 L820,363 L850,374 L880,385 L910,396 L940,406 L970,414 L1000,421 L1030,426 L1060,428 L1090,428 L1120,425 L1150,419" opacity="0.20"/><path d="M-50,635 L-20,634 L10,630 L40,623 L70,613 L100,600 L130,585 L160,568 L190,549 L220,528 L250,507 L280,485 L310,463 L340,442 L370,422 L400,403 L430,386 L460,372 L490,360 L520,350 L550,344 L580,341 L610,340 L640,342 L670,347 L700,354 L730,362 L760,373 L790,384 L820,396 L850,408 L880,419 L910,430 L940,439 L970,446 L1000,451 L1030,453 L1060,453 L1090,450 L1120,444 L1150,435" opacity="0.05"/><path d="M-50,659 L-20,655 L10,648 L40,637 L70,624 L100,609 L130,591 L160,571 L190,550 L220,528 L250,505 L280,483 L310,461 L340,440 L370,421 L400,404 L430,389 L460,377 L490,367 L520,361 L550,358 L580,357 L610,360 L640,365 L670,373 L700,382 L730,393 L760,405 L790,417 L820,430 L850,442 L880,453 L910,463 L940,470 L970,476 L1000,478 L1030,478 L1060,475 L1090,469 L1120,460 L1150,448" opacity="0.08"/><path d="M-50,680 L-20,672 L10,662 L40,648 L70,632 L100,614 L130,593 L160,572 L190,549 L220,525 L250,502 L280,480 L310,458 L340,439 L370,421 L400,406 L430,394 L460,384 L490,378 L520,375 L550,375 L580,378 L610,384 L640,392 L670,402 L700,413 L730,426 L760,439 L790,452 L820,465 L850,477 L880,487 L910,495 L940,500 L970,503 L1000,503 L1030,500 L1060,494 L1090,484 L1120,472 L1150,457" opacity="0.10"/><path d="M-50,697 L-20,686 L10,672 L40,656 L70,637 L100,616 L130,593 L160,569 L190,546 L220,522 L250,499 L280,477 L310,456 L340,439 L370,423 L400,411 L430,401 L460,395 L490,392 L520,392 L550,396 L580,402 L610,411 L640,421 L670,434 L700,447 L730,461 L760,475 L790,488 L820,500 L850,511 L880,519 L910,525 L940,528 L970,528 L1000,525 L1030,518 L1060,509 L1090,496 L1120,480 L1150,462" opacity="0.12"/><path d="M-50,711 L-20,696 L10,679 L40,659 L70,638 L100,614 L130,590 L160,566 L190,541 L220,517 L250,495 L280,474 L310,456 L340,440 L370,428 L400,418 L430,412 L460,409 L490,410 L520,414 L550,421 L580,430 L610,441 L640,454 L670,468 L700,483 L730,497 L760,511 L790,524 L820,535 L850,544 L880,550 L910,553 L940,553 L970,550 L1000,543 L1030,533 L1060,520 L1090,504 L1120,485 L1150,464" opacity="0.15"/><path d="M-50,720 L-20,702 L10,682 L40,660 L70,636 L100,611 L130,585 L160,560 L190,536 L220,513 L250,492 L280,473 L310,457 L340,444 L370,435 L400,429 L430,427 L460,428 L490,432 L520,439 L550,449 L580,461 L610,475 L640,489 L670,505 L700,520 L730,535 L760,548 L790,559 L820,569 L850,575 L880,578 L910,578 L940,575 L970,568 L1000,558 L1030,544 L1060,527 L1090,508 L1120,486 L1150,463" opacity="0.17"/><path d="M-50,726 L-20,705 L10,682 L40,657 L70,631 L100,605 L130,580 L160,555 L190,531 L220,510 L250,490 L280,474 L310,461 L340,452 L370,446 L400,444 L430,445 L460,450 L490,458 L520,468 L550,481 L580,495 L610,511 L640,527 L670,543 L700,558 L730,572 L760,584 L790,593 L820,600 L850,603 L880,603 L910,600 L940,593 L970,582 L1000,568 L1030,551 L1060,531 L1090,508 L1120,484 L1150,459" opacity="0.20"/></svg>
+    <div class="lx-brand">
+      <img class="lx-logo" src="dh-logo.svg" alt="DH LAW">
+      <div class="lx-name">Domingues &amp; Herold Advogados</div>
+      <div class="lx-rule"></div>
+      <div class="lx-tag">Estamos comprometidos<br>com a <b>sua causa</b>.</div>
+    </div>
+    <div class="lx-copy">© DH LAW · Sistema interno</div>
+  </div>
+  <div class="lx-side">
+    <div class="lx-card">
+      <span class="lx-chip"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg> Área restrita</span>
+      <h1>Acesso ao CRM<span>Controladoria</span></h1>
+      <p class="lg-msg" id="lgMsg">Conectando à sua conta Google...</p>
+      <button class="lg-btn" id="lgBtn" type="button" style="display:none"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg> Entrar com Google <span class="lx-arr">→</span></button>
+      <p class="lg-err" id="lgErr"></p>
+      <a href="#" class="lg-switch" id="lgSwitch">Usar outra conta</a>
+      <div class="lx-foot"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg> Acesso seguro pela sua conta Google</div>
+    </div>
+  </div>
+</div>
+<div class="mbg" id="md_cu" onclick="if(event.target===this)fecharModal('md_cu')"><div class="mdl" id="cuCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_cu')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="cuTitulo">Novo lançamento</span></h2>
+          <input type="hidden" id="cu_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="cu_Cliente" autocomplete="off" placeholder="Buscar cliente…" onblur="setTimeout(fillCuProc,200)"><div class="cp-list"></div></div></div>
+            <div><label>Processo relacionado</label><select id="cu_ProcessoID"><option value="">(nenhum)</option></select></div>
+            <div><label>Categoria</label><select id="cu_Categoria"></select></div>
+            <div><label>Data</label><input type="date" id="cu_Data"></div>
+            <div><label>Valor (R$)</label><input id="cu_Valor" placeholder="0,00"></div>
+            <div><label>Cobrar do cliente?</label><select id="cu_Cobravel"><option value="Sim">Sim, cobrar do cliente</option><option value="Não">Não (despesa interna)</option></select></div>
+          </div>
+          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição</label><input id="cu_Descricao" placeholder="Guia de preparo do recurso, audiência de conciliação…"></div><div class="wide" style="grid-column:span 2"><label>Link do comprovante (opcional)</label><input id="cu_DocumentoLink" placeholder="https://drive.google.com/…"></div></div>
+          <div class="btn-row"><button class="btn" id="cuBtn" onclick="salvarCusta()">+ Lançar</button><button class="btn ghost" id="cuCancel" style="display:none" onclick="limparCusta()">Cancelar edição</button></div>
+        </div></div>
+<div class="mbg" id="md_hr" onclick="if(event.target===this)fecharModal('md_hr')"><div class="mdl" id="hrCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_hr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="hrTitulo">Incluir / ajustar tarefa</span></h2>
+          <input type="hidden" id="hr_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="hr_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Data</label><input type="date" id="hr_Data"></div>
+            <div><label>Advogado</label><select id="hr_Responsavel"></select></div>
+            <div><label>Tempo gasto</label><input id="hr_Duracao" placeholder="1:30"></div>
+            <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="hr_Tarefa" placeholder="Revisão de contrato de locação"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="hrBtn" onclick="salvarHoras()">+ Incluir tarefa</button><button class="btn ghost" id="hrCancel" style="display:none" onclick="limparHoras()">Cancelar edição</button></div>
+        </div></div>
+<div class="mbg" id="md_tp" onclick="if(event.target===this)fecharModal('md_tp')"><div class="mdl" id="tpCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_tp')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="tpTitulo">Incluir / ajustar tarefa</span></h2>
+          <input type="hidden" id="tp_ID">
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="tp_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Data</label><input type="date" id="tp_Data"></div>
+            <div><label>Advogado</label><select id="tp_Responsavel"></select></div>
+            <div><label>Tempo gasto</label><input id="tp_Duracao" placeholder="1:30"></div>
+            <div class="wide" style="grid-column:span 2"><label>Descrição da tarefa</label><input id="tp_Tarefa" placeholder="Revisão de contrato de locação"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="tpBtn" onclick="salvarTarefaProc()">+ Incluir tarefa</button><button class="btn ghost" id="tpCancel" style="display:none" onclick="limparTarefaProc()">Cancelar edição</button></div>
+        </div></div>
+<div class="mbg" id="md_ex" onclick="if(event.target===this)fecharModal('md_ex')"><div class="mdl" id="exCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_ex')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="exTitulo">Extras do cliente no mês</span></h2>
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="ex_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Horas processuais (hh:mm)</label><input id="ex_HorasProcessual" placeholder="05:30"></div>
+            <div><label>Audiências realizadas (qtd)</label><input id="ex_Audiencias" placeholder="0"></div>
+            <div><label>Excesso de processos (qtd)</label><input id="ex_ExcessoProcessos" placeholder="0"><small id="exProcAuto" class="muted" style="display:none;margin-top:4px">Este cliente já tem pasta de processos: o excesso é calculado sozinho e este número não é usado.</small></div>
+            <div><label>Reembolso de custas (R$)</label><input id="ex_Custas" placeholder="0,00"></div>
+          </div>
+          <div class="formrow"><div class="wide" style="grid-column:span 2"><label>Descrição das audiências</label><input id="ex_DescricaoAudiencias" placeholder="30/09/2026 - 14:10 - 1VT ... Audiência UNA"></div><div class="wide" style="grid-column:span 2"><label>Descrição das custas</label><input id="ex_DescricaoCustas" placeholder="Correio: notificação extrajudicial"></div></div>
+          <div class="btn-row"><button class="btn" onclick="salvarExtras()">Salvar extras</button><button class="btn ghost" onclick="limparExtras()">Limpar</button></div>
+          <p class="example-note" style="margin:10px 0 0">Custas e audiências lançadas na tela "Custas e audiências" entram sozinhas. Aqui vai só o que não foi lançado lá (ou o que veio da planilha), para não contar duas vezes.</p>
+        </div></div>
+<input type="file" id="arqTarefas" accept=".xlsx,.xls,.csv" style="display:none" onchange="importarTarefas(this)">
+<div class="sync-toast" id="syncToast"></div>
+
+<div class="shell">
+  <aside class="side">
+    <div class="side-logo"><img src="logo-dh.png" alt="Domingues &amp; Herold"></div>
+    <div class="side-tag">Controladoria</div>
+    <nav id="nav"></nav>
+    <a class="side-back" id="sideBack" href="index.html">← CRM Financeiro</a>
+  </aside>
+
+  <div>
+    <header class="topbar">
+      <b id="tbTela">Painel da Controladoria</b>
+      <span class="who"><span id="who"></span><span id="whoPerfil"></span><a id="btnSair">Sair</a></span>
+    </header>
+
+    <div id="loading">Carregando...</div>
+    <main id="app" style="display:none">
+
+      <!-- PAINEL -->
+      <section class="view on" id="v-painel">
+        <div class="pn-top"><div><h1>Painel da Controladoria</h1>
+        <p class="sub">Tudo o que foi lançado no sistema, mês a mês: consultivo, processual, custas, audiências e equipe. Sem valores de contrato do cliente.</p></div>
+        <label class="mes-lbl">Mês <input type="month" id="pnMes" onchange="mudarComp(this.value)"></label></div>
+        <div class="pn-grupo">Consultivo</div><div class="stats" id="pnCons"></div>
+        <div class="pn-grupo">Processual</div><div class="stats" id="pnProc"></div>
+        <div class="pn-grupo">Custas, audiências e equipe</div><div class="stats" id="pnOutros"></div>
+        <div class="pn-cols">
+          <div class="card"><h2><span class="t">Clientes acima das horas contratadas</span><button class="btn ghost sm" onclick="goTab('consultivo')">Consultivo</button></h2><div class="tbl-wrap" id="pnExced"></div></div>
+          <div class="card"><h2><span class="t">Processos acima do contrato</span><button class="btn ghost sm" onclick="goTab('processos')">Processual</button></h2><div class="tbl-wrap" id="pnProcExc"></div></div>
+        </div>
+        <div class="card"><h2><span class="t" id="pnAnoT">Horas no ano</span></h2><div id="pnAno"></div></div>
+        <div class="card"><h2><span class="t">Pendências de reconciliação</span></h2><p class="example-note" style="margin-top:-8px">Avisos automáticos para o Financeiro (ex.: processo extra para cobrar à parte, cliente sem valor de hora extra).</p><div class="tbl-wrap" id="pnPend"></div></div>
+      </section>
+
+      <!-- CLIENTES -->
+      <section class="view" id="v-clientes">
+        <h1>Clientes</h1>
+        <p class="sub">Cadastro único, o mesmo do Financeiro. Valores e dados bancários do cliente ficam só no Financeiro.</p>
+        <div class="search"><input id="clBusca" placeholder="Buscar cliente por nome…" oninput="PG.cli=1;renderClientes()"><select id="clTipo" onchange="PG.cli=1;renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="">Todos os contratos</option><option>Assessoria mensal</option><option>DET</option><option>Pontual</option></select><select id="clStatus" onchange="PG.cli=1;renderClientes()" style="padding:10px 12px;border:1.5px solid var(--line);border-radius:6px;font-size:13px"><option value="ativos">Ativos</option><option value="todos">Todos</option></select><button class="btn" data-ico="mais" onclick="novoCliente()">Novo cliente</button></div>
+        <div class="card" style="padding:0"><div class="tbl-wrap" id="clTabela"></div></div>
+        <div class="mbg" id="md_cl" onclick="if(event.target===this)fecharModal('md_cl')"><div class="mdl" id="clCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_cl')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="clTitulo">Novo cliente</span></h2>
+          <input type="hidden" id="cl_ID">
+          <div class="formrow">
+            <div class="wide" style="grid-column:span 2"><label>Nome (igual ao contrato)</label><input id="cl_Nome" placeholder="Razão social ou nome"></div>
+            <div><label>Modalidade</label><input id="cl_Tipo" list="dlTipos" placeholder="Assessoria mensal, Pontual, DET…"></div>
+            <div><label>Situação</label><input id="cl_Status" list="dlStatus" placeholder="Ativo"></div>
+          </div>
+          <div class="formrow">
+            <div><label>Horas contratadas/mês</label><input id="cl_HorasContratadas" placeholder="10:00"></div>
+            <div><label>Processos contratados</label><input id="cl_ProcessosContratados" placeholder="0"></div>
+            <div><label>Responsável</label><input id="cl_Responsavel" list="dlResp" placeholder="advogado(a)"></div>
+            <div><label>Subtipo</label><input id="cl_Subtipo" placeholder="opcional"></div>
+          </div>
+          <div class="formrow">
+            <div><label>Início do contrato</label><input type="date" id="cl_DataInicio"></div>
+            <div><label>Fim do contrato</label><input type="date" id="cl_DataFim"></div>
+            <div class="wide" style="grid-column:span 2"><label id="clObjLbl">O que é este contrato</label><input id="cl_ObjetoContrato" placeholder="Ex.: Ação revisional contra o Banco X; parecer sobre sucessão…"></div>
+          </div>
+          <p class="example-note" style="margin:0 0 12px">Mensalidade, valor da hora extra, valores de audiência/processo e dados de pagamento são preenchidos pelo Financeiro (ele recebe um aviso).</p>
+          <div class="btn-row"><button class="btn" id="clBtn" onclick="salvarCliente()">Cadastrar cliente</button><button class="btn ghost" onclick="fecharModal('md_cl')">Cancelar</button></div>
+          <datalist id="dlTipos"></datalist><datalist id="dlStatus"></datalist><datalist id="dlResp"></datalist>
+        </div></div>
+      </section>
+
+      <!-- PROCESSOS -->
+      <section class="view" id="v-processos">
+        <h1>Processos</h1>
+        <p class="sub">Uma pasta por cliente. O sistema compara os processos em uso em <b id="prMesTxt"></b> com a quantidade do contrato e, se passar, a cobrança de processo extra entra sozinha no Fechamento do mês.</p>
+        <div class="mbg" id="md_pr" onclick="if(event.target===this)fecharModal('md_pr')"><div class="mdl" id="prCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_pr')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="prTitulo">Novo processo</span></h2>
+          <input type="hidden" id="pr_ID">
+          <div class="fsec">Cliente e cobrança</div>
+          <div class="fgrid">
+            <div class="s2"><label>Cliente</label><div class="cp"><input id="pr_Cliente" autocomplete="off" placeholder="Buscar cliente…" onblur="setTimeout(fillPrContrato,200)"><div class="cp-list"></div></div></div>
+            <div class="s2"><label>Classificação (cobrança)</label><select id="pr_Contrato"></select><small class="muted" id="prContratoInfo"></small></div>
+          </div>
+          <div class="fsec">Processo</div>
+          <div class="fgrid">
+            <div class="s2"><label>Nº do processo (CNJ)</label><input id="pr_NumeroCNJ" placeholder="0000000-00.0000.0.00.0000"></div>
+            <div><label>Área jurídica</label><input id="pr_AreaJuridica" list="dlAreas" placeholder="Trabalhista, Cível…"></div>
+            <div><label>Advogado responsável</label><select id="pr_AdvogadoResponsavel"></select></div>
+            <div class="s4"><label>Partes</label><input id="pr_Partes" placeholder="Reclamante x Reclamada"></div>
+            <div class="s4"><label>Vara</label><input id="pr_Vara" placeholder="2ª Vara do Trabalho de…"></div>
+          </div>
+          <div class="fsec">Valores</div>
+          <div class="fgrid">
+            <div><label>Valor da causa (R$)</label><input id="pr_ValorCausa" placeholder="0,00"></div>
+            <div><label>Condenação / acordo (R$)</label><input id="pr_CondenacaoAcordo" placeholder="0,00"></div>
+            <div><label>Valores recebidos (R$)</label><input id="pr_ValoresRecebidos" placeholder="0,00"></div>
+            <div><label>Saving (R$)</label><input id="pr_Saving" placeholder="automático se vazio"></div>
+          </div>
+          <div class="fsec">Andamento</div>
+          <div class="fgrid">
+            <div><label>Situação</label><select id="pr_Situacao"><option>Ativo</option><option>Arquivado</option></select></div>
+            <div><label>Data de início</label><input type="date" id="pr_DataInicio"></div>
+            <div><label>Data de encerramento</label><input type="date" id="pr_DataEncerramento"></div>
+            <div class="s4"><label>Situação atualizada (andamento)</label><input id="pr_SituacaoAtualizada" placeholder="Aguardando sentença…"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="prBtn" onclick="salvarProcesso()">+ Registrar processo</button><button class="btn ghost" id="prCancel" style="display:none" onclick="limparProcesso()">Cancelar edição</button></div>
+          <datalist id="dlAreas"><option>Trabalhista</option><option>Cível</option><option>Tributário</option><option>Empresarial</option><option>Consumidor</option><option>Previdenciário</option></datalist>
+        </div></div>
+        <div class="card" style="padding:0">
+          <div class="toolbar"><input id="prBusca" placeholder="Buscar cliente, número do processo ou partes…" oninput="PG.pr=1;renderProcessos()"><select id="prFiltro" onchange="PG.pr=1;renderProcessos()"><option value="">Todas as pastas</option><option value="exc">Acima do contrato</option><option value="com">Com processos</option><option value="parte">Com processos extras (à parte)</option></select><label class="mes-lbl">Mês <input type="month" id="prMes" onchange="mudarComp(this.value)"></label><button class="btn" data-ico="mais" onclick="novoProcesso()">Novo processo</button></div>
+          <div class="tbl-wrap" id="prTabela"></div>
+        </div>
+      </section>
+
+      <!-- CONSULTIVO -->
+      <section class="view" id="v-consultivo">
+        <h1>Consultivo</h1>
+        <p class="sub">Uma pasta por cliente e por mês. Importe a planilha de tarefas do cliente (Tarefa | Data | Tempo | Advogado): o sistema soma as horas, compara com o contrato e o excedente entra sozinho no Contas a Receber do mês seguinte.</p>
+        <div class="card" style="padding:0">
+          <div class="toolbar"><label class="mes-lbl">Mês trabalhado <input type="month" id="hrMes" onchange="mudarComp(this.value)"></label><input id="coBusca" placeholder="Buscar cliente…" oninput="PG.co=1;renderConsultivo()"><select id="coFiltro" onchange="PG.co=1;renderConsultivo()"><option value="">Todas as pastas</option><option value="exc">Acima do contrato</option><option value="sem">Sem lançamento no mês</option></select></div>
+          <div class="tbl-wrap" id="coTabela"></div>
+        </div>
+      </section>
+
+      <!-- RELATÓRIO ANUAL -->
+      <section class="view" id="v-relatorio">
+        <h1>Relatório Anual</h1>
+        <p class="sub">Relatório por cliente e período. Tudo na pré-visualização pode ser ajustado à mão antes de exportar para PowerPoint.</p>
+        <div class="card">
+          <h2><span class="t">Gerar relatório</span></h2>
+          <div class="formrow">
+            <div><label>Cliente</label><div class="cp"><input id="ra_Cliente" autocomplete="off" placeholder="Buscar cliente…"><div class="cp-list"></div></div></div>
+            <div><label>Contrato</label><select id="ra_Contrato"><option value="">Todos os contratos</option></select></div>
+            <div><label>De</label><input type="month" id="ra_De"></div>
+            <div><label>Até</label><input type="month" id="ra_Ate"></div>
+          </div>
+          <button class="btn" data-ico="grafico" onclick="gerarRelatorio()">Gerar relatório</button>
+        </div>
+        <div id="raPrev"></div>
+      </section>
+
+      <!-- FÉRIAS -->
+      <section class="view" id="v-ferias">
+        <h1>Férias</h1>
+        <p class="sub">Programação e histórico de férias da equipe: as mesmas informações do CRM Financeiro (o que um altera, o outro vê).</p>
+        <datalist id="dlColab"></datalist>
+        <div class="mbg" id="md_fe" onclick="if(event.target===this)fecharModal('md_fe')"><div class="mdl" id="feCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_fe')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="feTitulo">Programação de férias</span></h2>
+          <input type="hidden" id="fe_ID">
+          <div class="formrow">
+            <div><label>Colaborador</label><input id="fe_Nome" list="dlColab" placeholder="nome"></div>
+            <div><label>Vencimento das férias</label><input type="date" id="fe_Vencimento"></div>
+            <div><label>Saldo (dias)</label><input id="fe_Saldo" type="number" step="1" placeholder="ex.: 30"></div>
+            <div><label>Situação</label><select id="fe_Status"></select></div>
+            <div class="wide" style="grid-column:span 2"><label>Observações</label><input id="fe_Obs" placeholder="ex.: fracionar em 2 períodos, aviso enviado…"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="feBtn" onclick="salvarFerias()">+ Adicionar</button><button class="btn ghost" id="feCancel" style="display:none" onclick="limparFerias()">Cancelar edição</button></div>
+        </div></div>
+        <div class="search" style="margin-bottom:12px"><input id="feBusca" placeholder="Buscar pessoa…" oninput="PG.fe=1;PG.fh=1;renderFerias()"><button class="btn" data-ico="mais" onclick="novaFerias()">Programar férias</button><button class="btn ghost" data-ico="mais" onclick="novoHistorico()">Registrar férias tiradas</button></div>
+        <div class="card" style="padding:0"><div style="padding:16px 22px 4px"><b style="font-size:14px">Programação de férias</b></div><div class="tbl-wrap" id="feTabela"></div></div>
+        <div class="mbg" id="md_fh" onclick="if(event.target===this)fecharModal('md_fh')"><div class="mdl" id="fhCard">
+          <h2><button class="mx" type="button" onclick="fecharModal('md_fh')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="fhTitulo">Registrar férias tiradas</span></h2>
+          <input type="hidden" id="fh_ID">
+          <div class="formrow">
+            <div><label>Pessoa</label><input id="fh_Nome" list="dlColab" placeholder="nome"></div>
+            <div><label>Início</label><input type="date" id="fh_Inicio"></div>
+            <div><label>Fim</label><input type="date" id="fh_Fim"></div>
+            <div class="wide" style="grid-column:span 2"><label>Observações</label><input id="fh_Obs" placeholder="ex.: 1º período, 15 dias…"></div>
+          </div>
+          <div class="btn-row"><button class="btn" id="fhBtn" onclick="salvarHistorico()">+ Adicionar ao histórico</button><button class="btn ghost" id="fhCancel" style="display:none" onclick="limparHistorico()">Cancelar edição</button></div>
+        </div></div>
+        <div class="card" style="padding:0"><div class="tbl-wrap" id="fhTabela"></div></div>
+      </section>
+
+      <!-- USUÁRIOS (só Admin) -->
+      <section class="view" id="v-usuarios">
+        <h1>Usuários e perfis</h1>
+        <p class="sub">Acessos cadastrados e o perfil de cada um. A Controladoria nunca vê o financeiro.</p>
+        <div class="card">
+          <h2><span class="t">Cadastrar / alterar acesso</span></h2>
+          <div class="formrow">
+            <div><label>E-mail Google</label><input id="us_Email" placeholder="controladoria@advogadosdh.com.br"></div>
+            <div><label>Nome</label><input id="us_Nome"></div>
+            <div><label>Perfil</label><select id="us_Perfil"><option>Controladoria</option><option>Financeiro</option><option>Admin</option></select></div>
+            <div><label>Ativo</label><select id="us_Ativo"><option>Sim</option><option>Não</option></select></div>
+          </div>
+          <button class="btn" onclick="salvarUsuario()">Salvar acesso</button>
+        </div>
+        <div class="card" style="padding:0"><div class="tbl-wrap" id="usTabela"></div></div>
+      </section>
+
+    </main>
+  </div>
+</div>
+<div class="mbg" id="md_ver" onclick="if(event.target===this)fecharModal('md_ver')"><div class="mdl"><h2><button class="mx" type="button" onclick="fecharModal('md_ver')" title="Fechar"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg></button><span class="t" id="verTitulo"></span></h2><div id="verCorpo"></div></div></div>
+<div class="toast" id="toast"></div>
+
+<script src="controladoria-tela.js?v=CTRL20"></script>
+</body>
+</html>

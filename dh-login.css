@@ -1,0 +1,48 @@
+/* ===== Tela de acesso DH LAW (inspirada em dhlaw.com.br) ===== */
+.lg-gate.lx{background:#0A0F22;background-image:none;padding:0;align-items:stretch;justify-content:stretch;font-family:'Montserrat',sans-serif;}
+.lg-gate.lx.on{display:flex;}
+.lx-art{position:relative;flex:1 1 58%;overflow:hidden;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:48px;color:#fff;
+  background:radial-gradient(120% 90% at 18% 12%,#24357A 0%,rgba(36,53,122,0) 55%),radial-gradient(90% 80% at 90% 100%,rgba(35,185,214,.28) 0%,rgba(35,185,214,0) 60%),linear-gradient(150deg,#141D3F 0%,#0E1531 55%,#070B19 100%);}
+.lx-waves{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+.lx-waves path{fill:none;stroke:#23B9D6;stroke-width:1.2;}
+.lx-brand{position:relative;text-align:center;max-width:520px;width:100%;}
+.lx-logo{width:min(400px,78%);height:auto;display:block;margin:0 auto 34px;filter:drop-shadow(0 18px 40px rgba(0,0,0,.45));}
+.lx-name{font-family:'Josefin Sans','Montserrat',sans-serif;font-size:15px;letter-spacing:6px;text-transform:uppercase;color:#E8ECF7;font-weight:600;}
+.lx-rule{width:56px;height:2px;background:#23B9D6;margin:18px auto;border-radius:2px;}
+.lx-tag{font-family:'Josefin Sans','Montserrat',sans-serif;font-size:21px;line-height:1.45;color:#C9D1EA;font-weight:300;letter-spacing:.3px;}
+.lx-tag b{color:#fff;font-weight:600;}
+.lx-copy{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:10.5px;letter-spacing:2px;text-transform:uppercase;color:rgba(201,209,234,.55);}
+.lx-side{flex:0 0 min(540px,46%);display:flex;align-items:center;justify-content:center;padding:40px 36px;background:#F3F5FA;overflow-y:auto;}
+.lx-card{width:100%;max-width:420px;background:#fff;border-radius:22px;padding:44px 40px 34px;box-shadow:0 30px 70px rgba(20,29,63,.16),0 2px 6px rgba(20,29,63,.06);color:#141D3F;}
+.lx-chip{display:inline-flex;align-items:center;gap:7px;font-size:10.5px;font-weight:700;letter-spacing:1.8px;text-transform:uppercase;color:#0B7F96;background:#E4F6FA;padding:6px 11px;border-radius:30px;}
+.lx-chip svg{flex:none;}
+.lx-card h1{font-family:'Josefin Sans','Montserrat',sans-serif;font-size:32px;line-height:1.1;font-weight:700;margin:20px 0 6px;letter-spacing:-.2px;color:#141D3F;}
+.lx-card h1 span{display:block;font-weight:300;color:#364B9B;}
+.lx-card .lg-msg{font-size:14px;line-height:1.6;color:#6B7390;margin:12px 0 26px;min-height:22px;}
+.lx-card .lg-btn{width:100%;justify-content:flex-start;gap:14px;border-radius:14px;padding:8px 18px 8px 8px;min-height:56px;font-size:13px;letter-spacing:1px;
+  background:linear-gradient(95deg,#364B9B 0%,#2A73B8 55%,#23B9D6 100%);box-shadow:0 12px 26px rgba(54,75,155,.32);transition:transform .15s,box-shadow .15s,filter .15s;}
+.lx-card .lg-btn:hover{background:linear-gradient(95deg,#364B9B 0%,#2A73B8 55%,#23B9D6 100%);filter:brightness(1.07);transform:translateY(-1px);box-shadow:0 16px 30px rgba(54,75,155,.38);}
+.lx-card .lg-btn svg{background:#fff;padding:9px;border-radius:10px;box-sizing:content-box;}
+.lx-card .lg-btn .lx-arr{margin-left:auto;font-size:18px;line-height:1;opacity:.9;}
+.lx-card .lg-err{margin-top:14px;}
+.lx-card .lg-switch{color:#364B9B;}
+.lx-div{display:flex;align-items:center;gap:12px;margin:28px 0 16px;font-size:10.5px;letter-spacing:1.6px;text-transform:uppercase;color:#9AA2BA;font-weight:600;}
+.lx-div:before,.lx-div:after{content:"";flex:1;height:1px;background:#E3E7F0;}
+.lx-alt{display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border:1.5px solid #E3E7F0;border-radius:14px;background:#fff;color:#141D3F;text-decoration:none;font-family:inherit;text-align:left;cursor:pointer;transition:.15s;}
+.lx-alt:hover{border-color:#23B9D6;background:#F6FCFE;}
+.lx-alt .lx-ic{width:38px;height:38px;border-radius:10px;background:#EEF1FA;color:#364B9B;display:flex;align-items:center;justify-content:center;flex:none;}
+.lx-alt b{display:block;font-size:13.5px;}
+.lx-alt small{display:block;font-size:12px;color:#7A829C;margin-top:2px;}
+.lx-alt .lx-arr{margin-left:auto;color:#364B9B;font-size:18px;}
+.lx-alt[disabled]{cursor:default;opacity:.7;}
+.lx-alt[disabled]:hover{border-color:#E3E7F0;background:#fff;}
+.lx-alt[disabled] .lx-arr{display:none;}
+.lx-foot{display:flex;align-items:center;justify-content:center;gap:7px;margin-top:26px;font-size:11px;color:#9AA2BA;letter-spacing:.3px;}
+@media (max-width:900px){
+  .lg-gate.lx{flex-direction:column;overflow-y:auto;}
+  .lx-art{flex:0 0 auto;padding:40px 24px 34px;}
+  .lx-logo{width:180px;margin-bottom:18px;}
+  .lx-tag{font-size:16px;} .lx-copy{display:none;}
+  .lx-side{flex:1 0 auto;padding:28px 16px 40px;align-items:flex-start;}
+  .lx-card{padding:32px 24px 26px;}
+}
